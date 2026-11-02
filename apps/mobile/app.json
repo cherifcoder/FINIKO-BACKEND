@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "FINIKO",
+    "slug": "finiko",
+    "version": "2.0.0",
+    "orientation": "portrait",
+    "scheme": "finiko",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "ml.finiko.app"
+    },
+    "android": {
+      "package": "ml.finiko.app",
+      "edgeToEdgeEnabled": true,
+      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}

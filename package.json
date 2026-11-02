@@ -1,0 +1,37 @@
+{
+  "name": "finiko",
+  "version": "2.0.0-alpha.0",
+  "private": true,
+  "description": "FINIKO v2 - plateforme de blanchisserie et pressing multi-roles",
+  "packageManager": "pnpm@10.34.9",
+  "engines": {
+    "node": ">=22.11.0",
+    "pnpm": ">=10.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @finiko/api --filter @finiko/mobile dev",
+    "dev:api": "pnpm --filter @finiko/api dev",
+    "dev:mobile": "pnpm --filter @finiko/mobile dev",
+    "build": "pnpm --filter @finiko/api build",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "test:coverage": "pnpm --filter @finiko/api test:coverage",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:reset": "docker compose down -v",
+    "db:logs": "docker compose logs -f mongo redis"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.0.0",
+    "eslint": "^10.14.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.9.10",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.1"
+  }
+}
