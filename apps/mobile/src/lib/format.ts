@@ -11,3 +11,15 @@ export function formatXOF(amount: number): string {
 export function formatOrderNumber(sequence: number): string {
   return `#FK-${sequence}`;
 }
+
+const dateFormatter = new Intl.DateTimeFormat('fr-FR', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+});
+
+/** Formate une date ISO en date lisible, ex. "2 novembre 2026". */
+export function formatDate(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? '—' : dateFormatter.format(date);
+}

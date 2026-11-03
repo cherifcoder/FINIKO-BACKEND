@@ -1,178 +1,123 @@
-import { loginSchema } from '@finiko/contracts';
+import { Link, Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, radius, spacing, typography } from '../../src/theme/tokens';
+import { StyleSheet, Text } from 'react-native';
+import { loginSchema } from '@finiko/contracts';
+import { loginRequest } from '../../src/api/auth';
+import { ApiClientError } from '../../src/api/client';
+import { useAuthStore } from '../../src/stores/auth.store';
+import { AuthLayout, Field, InlineMessage, PrimaryButton } from '../../src/ui/auth';
+import { colors, typography } from '../../src/theme/tokens';
+
+const NOTICES: Record<string, string> = {
+  'password-reset': 'Mot de passe réinitialisé. Connectez-vous avec votre nouveau mot de passe.',
+  'password-changed': 'Mot de passe modifié. Reconnectez-vous avec votre nouveau mot de passe.',
+};
 
 export default function LoginScreen() {
+  const status = useAuthStore((state) => state.status);
+  const setSession = useAuthStore((state) => state.setSession);
+  const params = useLocalSearchParams<{ notice?: string }>();
+  const notice = typeof params.notice === 'string' ? NOTICES[params.notice] : undefined;
+
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const onSubmit = () => {
+  if (status === 'authenticated') {
+    return <Redirect href="/(app)/accueil" />;
+  }
+
+  const onSubmit = async () => {
     const parsed = loginSchema.safeParse({ identifier, password });
 
     if (!parsed.success) {
-      setSubmitted(false);
       setError(parsed.error.issues[0]?.message ?? 'Identifiants invalides.');
       return;
     }
 
     setError(null);
-    setSubmitted(true);
+    setLoading(true);
+
+    try {
+      const session = await loginRequest(parsed.data);
+      setSession(session);
+      router.replace('/(app)/accueil');
+    } catch (caught) {
+      setError(
+        caught instanceof ApiClientError
+          ? caught.message
+          : 'Connexion impossible. Réessayez dans un instant.',
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['bottom']}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <View style={styles.container}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Connexion</Text>
-            <Text style={styles.subtitle}>
-              Email ou téléphone, puis votre mot de passe. L'API sera branchée au lot 1.
-            </Text>
-          </View>
+    <AuthLayout
+      title="Connexion"
+      subtitle="Email ou téléphone, puis votre mot de passe."
+      footer={
+        <Text style={styles.footerText}>
+          Pas encore de compte ?{' '}
+          <Link href="/(auth)/register" style={styles.link}>
+            Créer un compte client
+          </Link>
+        </Text>
+      }
+    >
+      {notice && !error ? <InlineMessage tone="success">{notice}</InlineMessage> : null}
 
-          <View style={styles.form}>
-            <View style={styles.field}>
-              <Text style={styles.label}>Email ou téléphone</Text>
-              <TextInput
-                autoCapitalize="none"
-                autoComplete="username"
-                keyboardType="email-address"
-                onChangeText={setIdentifier}
-                placeholder="client@finiko.ml ou +22370000002"
-                placeholderTextColor={colors.textMuted}
-                style={styles.input}
-                value={identifier}
-              />
-            </View>
+      <Field
+        autoCapitalize="none"
+        autoComplete="username"
+        keyboardType="email-address"
+        label="Email ou téléphone"
+        onChangeText={setIdentifier}
+        placeholder="client@finiko.ml ou +22370000002"
+        value={identifier}
+      />
 
-            <View style={styles.field}>
-              <Text style={styles.label}>Mot de passe</Text>
-              <TextInput
-                autoCapitalize="none"
-                autoComplete="current-password"
-                onChangeText={setPassword}
-                placeholder="Votre mot de passe"
-                placeholderTextColor={colors.textMuted}
-                secureTextEntry
-                style={styles.input}
-                value={password}
-              />
-            </View>
+      <Field
+        autoCapitalize="none"
+        autoComplete="current-password"
+        label="Mot de passe"
+        onChangeText={setPassword}
+        placeholder="Votre mot de passe"
+        secureTextEntry
+        value={password}
+      />
 
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-            {submitted ? (
-              <Text style={styles.success}>
-                Formulaire validé par les contrats partagés. Branchement API à venir.
-              </Text>
-            ) : null}
+      <Link href="/(auth)/forgot-password" style={styles.forgotLink}>
+        Mot de passe oublié ?
+      </Link>
 
-            <Pressable
-              accessibilityRole="button"
-              onPress={onSubmit}
-              style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
-            >
-              <Text style={styles.buttonText}>Se connecter</Text>
-            </Pressable>
-          </View>
+      {error ? <InlineMessage tone="error">{error}</InlineMessage> : null}
 
-          <Text style={styles.hint}>
-            Inscription ouverte aux clients uniquement. Les comptes livreur, pressing et admin sont
-            créés par un administrateur.
-          </Text>
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      <PrimaryButton label="Se connecter" loading={loading} onPress={() => void onSubmit()} />
+
+      <Text style={styles.hint}>
+        Les comptes livreur, pressing et administrateur sont créés par un administrateur.
+      </Text>
+    </AuthLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  flex: {
-    flex: 1,
-  },
-  container: {
-    flex: 1,
-    padding: spacing.xl,
-    gap: spacing.xl,
-  },
-  header: {
-    gap: spacing.sm,
-  },
-  title: {
-    ...typography.display,
-    fontSize: 28,
-    lineHeight: 34,
-    color: colors.text,
-  },
-  subtitle: {
-    ...typography.body,
-    color: colors.textMuted,
-  },
-  form: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    gap: spacing.lg,
-    padding: spacing.lg,
-  },
-  field: {
-    gap: spacing.xs,
-  },
-  label: {
+  footerText: {
     ...typography.caption,
     color: colors.textMuted,
-    textTransform: 'uppercase',
-  },
-  input: {
-    ...typography.body,
-    backgroundColor: colors.background,
-    borderColor: colors.border,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    color: colors.text,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  button: {
-    backgroundColor: colors.brand[600],
-    borderRadius: radius.md,
-    paddingVertical: spacing.md,
-  },
-  buttonPressed: {
-    opacity: 0.85,
-  },
-  buttonText: {
-    ...typography.body,
-    color: colors.surface,
-    fontWeight: '700',
     textAlign: 'center',
   },
-  error: {
-    ...typography.caption,
-    color: colors.danger,
+  link: {
+    color: colors.brand[600],
+    fontWeight: '700',
   },
-  success: {
+  forgotLink: {
     ...typography.caption,
-    color: colors.success,
+    color: colors.brand[600],
+    fontWeight: '700',
   },
   hint: {
     ...typography.caption,

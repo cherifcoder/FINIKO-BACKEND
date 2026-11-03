@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  adminCreateUserSchema,
   canTransitionOrder,
+  changePasswordSchema,
   loginSchema,
   phoneSchema,
   quoteRequestSchema,
   registerSchema,
+  updateProfileSchema,
 } from './index';
 
 const CATALOG_ITEM_ID = '507f1f77bcf86cd799439011';
@@ -19,37 +22,96 @@ describe('phoneSchema', () => {
   });
 });
 
-describe('registerSchema', () => {
-  it('accepte une inscription par telephone', () => {
-    const result = registerSchema.safeParse({
-      fullName: 'Awa Traore',
-      phone: '+22370000002',
-      password: 'Client@2026',
-      acceptTerms: true,
-    });
+const registerPayload = {
+  firstName: 'Awa',
+  lastName: 'Traore',
+  phone: '+22370000002',
+  password: 'Client@2026',
+  acceptTerms: true as const,
+};
 
-    expect(result.success).toBe(true);
+describe('registerSchema', () => {
+  it('accepte une inscription client avec telephone seul', () => {
+    expect(registerSchema.safeParse(registerPayload).success).toBe(true);
   });
 
-  it('refuse une inscription sans email ni telephone', () => {
-    const result = registerSchema.safeParse({
-      fullName: 'Awa Traore',
-      password: 'Client@2026',
-      acceptTerms: true,
-    });
-
-    expect(result.success).toBe(false);
+  it('refuse une inscription sans telephone', () => {
+    const { phone: _phone, ...withoutPhone } = registerPayload;
+    expect(registerSchema.safeParse(withoutPhone).success).toBe(false);
   });
 
   it('refuse un mot de passe trop simple', () => {
-    const result = registerSchema.safeParse({
-      fullName: 'Awa Traore',
-      phone: '+22370000002',
-      password: 'motdepasse',
-      acceptTerms: true,
+    expect(registerSchema.safeParse({ ...registerPayload, password: 'motdepasse' }).success).toBe(
+      false,
+    );
+  });
+});
+
+describe('updateProfileSchema', () => {
+  it('accepte un email nul pour le supprimer', () => {
+    expect(updateProfileSchema.safeParse({ email: null }).success).toBe(true);
+  });
+
+  it('refuse un objet vide', () => {
+    expect(updateProfileSchema.safeParse({}).success).toBe(false);
+  });
+});
+
+describe('changePasswordSchema', () => {
+  it('refuse un nouveau mot de passe identique', () => {
+    const result = changePasswordSchema.safeParse({
+      currentPassword: 'Client@2026',
+      newPassword: 'Client@2026',
     });
 
     expect(result.success).toBe(false);
+  });
+});
+
+describe('adminCreateUserSchema', () => {
+  it('exige le profil pressing pour un compte pressing', () => {
+    const result = adminCreateUserSchema.safeParse({
+      role: 'pressing',
+      firstName: 'Moussa',
+      lastName: 'Keita',
+      phone: '+22370000003',
+      password: 'Pressing@2026',
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('accepte un livreur sans profil detaille (defauts appliques par le service)', () => {
+    const result = adminCreateUserSchema.safeParse({
+      role: 'livreur',
+      firstName: 'Moussa',
+      lastName: 'Keita',
+      phone: '+22370000003',
+      password: 'Livreur@2026',
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.mustChangePassword).toBe(true);
+      expect(result.data.driver).toBeUndefined();
+    }
+  });
+
+  it('applique les valeurs par defaut du profil livreur fourni', () => {
+    const result = adminCreateUserSchema.safeParse({
+      role: 'livreur',
+      firstName: 'Moussa',
+      lastName: 'Keita',
+      phone: '+22370000003',
+      password: 'Livreur@2026',
+      driver: {},
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.driver?.vehicleType).toBe('moto');
+      expect(result.data.driver?.zoneCodes).toEqual([]);
+    }
   });
 });
 

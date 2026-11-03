@@ -169,7 +169,7 @@ const userSchema = new Schema(
     },
     firstName: { type: String, required: true, trim: true, maxlength: 80 },
     lastName: { type: String, required: true, trim: true, maxlength: 80 },
-    email: { type: String, trim: true, lowercase: true, default: null },
+    email: { type: String, trim: true, lowercase: true }, // absent si non renseigné
     phone: { type: String, required: true, trim: true, match: /^\+[1-9]\d{7,14}$/ },
     phoneVerifiedAt: { type: Date, default: null },
     passwordHash: { type: String, required: true, select: false },
@@ -207,6 +207,8 @@ userSchema.virtual('fullName').get(function () {
 ```
 
 **Règles** : mot de passe haché avec Argon2id (ou bcrypt 12), jamais renvoyé ; email optionnel mais unique s'il existe ; téléphone seul obligatoire ; `createdBy` renseigné pour les comptes créés par l'admin.
+
+> **Email absent plutôt que `null`** : MongoDB traite `null` comme une valeur indexée, ce qui ferait échouer l'index unique sparse dès le deuxième compte sans email. Le champ est donc **omis** du document lorsqu'il n'est pas fourni ; l'API le renvoie néanmoins en `email: null` dans l'utilisateur public.
 
 ### 5.2 Profils
 
@@ -977,37 +979,41 @@ auditLogSchema.index({ createdAt: -1 });
 
 const otpSchema = new Schema(
   {
-    phone: { type: String, required: true, index: true },
+    identifier: { type: String, required: true, index: true }, // téléphone E.164 ou email minuscule
+    channel: { type: String, enum: ['sms', 'email'], required: true },
     purpose: {
       type: String,
-      enum: ['register', 'login', 'phone_verify', 'order_confirm'],
+      enum: ['phone_verify', 'password_reset', 'login', 'order_confirm'],
       required: true,
     },
-    codeHash: { type: String, required: true },
+    codeHash: { type: String, required: true, select: false }, // HMAC-SHA256(OTP_PEPPER)
     expiresAt: { type: Date, required: true },
-    attempts: { type: Number, default: 0 },
+    attempts: { type: Number, default: 0, min: 0 },
     consumedAt: { type: Date, default: null },
   },
   { timestamps: true },
 );
 
 otpSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+otpSchema.index({ identifier: 1, purpose: 1, createdAt: -1 });
 
 const sessionSchema = new Schema(
   {
     user: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-    tokenHash: { type: String, required: true, unique: true },
+    tokenHash: { type: String, required: true, unique: true }, // SHA-256 du refresh opaque
+    familyId: { type: String, required: true, index: true }, // chaîne de rotation d'un même login
     deviceId: { type: String, default: null },
     deviceInfo: { type: String, default: null },
     ip: { type: String, default: null },
     expiresAt: { type: Date, required: true },
     revokedAt: { type: Date, default: null },
-    replacedBy: { type: String, default: null },
+    replacedBy: { type: String, default: null }, // id de la session suivante
   },
   { timestamps: true },
 );
 
 sessionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+sessionSchema.index({ user: 1, revokedAt: 1 });
 
 const idempotencyKeySchema = new Schema(
   {
@@ -1089,7 +1095,10 @@ reviewSchema.index({ targetType: 1, targetId: 1, createdAt: -1 });
 | `payments`            | `{ status: 1, expiresAt: 1 }`                    | Réconciliation/expiration |
 | `order_status_events` | `{ order: 1, createdAt: -1 }`                    | Timeline                  |
 | `notifications`       | `{ user: 1, createdAt: -1 }`                     | Centre de notifications   |
+| `otp_codes`           | `{ identifier: 1, purpose: 1, createdAt: -1 }`   | Dernier code émis         |
 | `otp_codes`           | TTL `expiresAt`                                  | Nettoyage                 |
+| `sessions`            | `{ familyId: 1 }`                                | Révocation de famille     |
+| `sessions`            | `{ user: 1, revokedAt: 1 }`                      | Sessions actives          |
 | `sessions`            | TTL `expiresAt`                                  | Nettoyage                 |
 | `idempotency_keys`    | `{ key: 1, user: 1 } unique`, TTL                | Idempotence               |
 
@@ -1761,7 +1770,8 @@ CREATE TABLE reviews (
 -- ============ SÉCURITÉ & AUDIT ============
 CREATE TABLE otp_codes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  phone VARCHAR(20) NOT NULL,
+  identifier VARCHAR(254) NOT NULL,
+  channel VARCHAR(10) NOT NULL CHECK (channel IN ('sms', 'email')),
   purpose VARCHAR(30) NOT NULL,
   code_hash TEXT NOT NULL,
   expires_at TIMESTAMPTZ NOT NULL,
@@ -1769,22 +1779,26 @@ CREATE TABLE otp_codes (
   consumed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX ix_otp_phone ON otp_codes (phone, purpose);
+CREATE INDEX ix_otp_identifier ON otp_codes (identifier, purpose, created_at DESC);
+CREATE INDEX ix_otp_expires ON otp_codes (expires_at);
 
 CREATE TABLE sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   token_hash TEXT NOT NULL UNIQUE,
+  family_id VARCHAR(64) NOT NULL,
   device_id VARCHAR(120),
   device_info VARCHAR(300),
   ip VARCHAR(45),
   expires_at TIMESTAMPTZ NOT NULL,
   revoked_at TIMESTAMPTZ,
-  replaced_by TEXT,
+  replaced_by UUID,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX ix_sessions_user ON sessions (user_id);
+CREATE INDEX ix_sessions_user ON sessions (user_id, revoked_at);
+CREATE INDEX ix_sessions_family ON sessions (family_id);
+CREATE INDEX ix_sessions_expires ON sessions (expires_at);
 
 CREATE TABLE idempotency_keys (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

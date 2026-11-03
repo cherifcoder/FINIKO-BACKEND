@@ -141,20 +141,23 @@ Authorization: Bearer <access_token>
 
 ## 3. Authentification
 
-| Méthode | Endpoint                | Rôle             | Description                     |
-| ------- | ----------------------- | ---------------- | ------------------------------- |
-| POST    | `/auth/register`        | public           | Inscription client + envoi OTP  |
-| POST    | `/auth/login`           | public           | Email/téléphone + mot de passe  |
-| POST    | `/auth/refresh`         | public (refresh) | Rotation des tokens             |
-| POST    | `/auth/logout`          | authentifié      | Révoque la session              |
-| POST    | `/auth/otp/request`     | public           | Renvoi de code                  |
-| POST    | `/auth/otp/verify`      | public           | Vérifie et active le compte     |
-| POST    | `/auth/password/forgot` | public           | Demande de réinitialisation     |
-| POST    | `/auth/password/reset`  | public (OTP)     | Nouveau mot de passe            |
-| GET     | `/auth/me`              | authentifié      | Profil + rôle + résumé          |
-| PATCH   | `/auth/me`              | authentifié      | Nom, email, avatar, préférences |
-| POST    | `/auth/push-token`      | authentifié      | Enregistre un token push        |
-| DELETE  | `/auth/push-token`      | authentifié      | Supprime un token               |
+| Méthode | Endpoint                | Rôle             | Description                                       |
+| ------- | ----------------------- | ---------------- | ------------------------------------------------- |
+| POST    | `/auth/register`        | public           | Inscription client + envoi OTP SMS                |
+| POST    | `/auth/login`           | public           | Email/téléphone + mot de passe                    |
+| POST    | `/auth/refresh`         | public (refresh) | Rotation des tokens                               |
+| POST    | `/auth/logout`          | authentifié      | Révoque la famille de sessions                    |
+| POST    | `/auth/otp/request`     | public           | Renvoi de code (vérification ou réinitialisation) |
+| POST    | `/auth/otp/verify`      | public           | Vérifie le téléphone et ouvre une session         |
+| POST    | `/auth/password/forgot` | public           | Demande de réinitialisation                       |
+| POST    | `/auth/password/reset`  | public (OTP)     | Nouveau mot de passe                              |
+| POST    | `/auth/password/change` | authentifié      | Change le mot de passe et révoque les sessions    |
+| GET     | `/auth/me`              | authentifié      | Profil + rôle                                     |
+| PATCH   | `/auth/me`              | authentifié      | Nom, email, avatar, préférences                   |
+| POST    | `/auth/push-token`      | authentifié      | Enregistre un token push                          |
+| DELETE  | `/auth/push-token`      | authentifié      | Supprime un token                                 |
+
+Le téléphone est **obligatoire** et au format E.164 (`+22370000002`). L'email est optionnel, mais unique et insensible à la casse s'il est fourni.
 
 ### `POST /auth/register`
 
@@ -175,14 +178,30 @@ Réponse `201` :
 {
   "success": true,
   "data": {
-    "user": { "id": "66f...", "role": "client", "firstName": "Awa", "phone": "+22370000002" },
+    "user": {
+      "id": "66f...",
+      "role": "client",
+      "firstName": "Awa",
+      "lastName": "Traoré",
+      "fullName": "Awa Traoré",
+      "email": "awa@example.com",
+      "phone": "+22370000002",
+      "phoneVerified": false,
+      "status": "actif",
+      "mustChangePassword": false,
+      "avatarUrl": null,
+      "locale": "fr",
+      "createdAt": "2026-11-02T18:30:00.000Z"
+    },
     "otpRequired": true,
-    "otpExpiresIn": 300
-  }
+    "otpExpiresIn": 300,
+    "devCode": "482913"
+  },
+  "message": "Compte créé. Vérifiez votre téléphone."
 }
 ```
 
-> Le rôle est forcé à `client`. Les champs `role`, `status`, `createdBy` sont ignorés s'ils sont envoyés.
+> Le rôle est forcé à `client`. Les champs `role`, `status`, `createdBy` sont ignorés s'ils sont envoyés. `devCode` n'est présent que hors production avec `OTP_EXPOSE_CODE=true`.
 
 ### `POST /auth/login`
 
@@ -202,7 +221,92 @@ Réponse `201` :
 }
 ```
 
-> `mustChangePassword=true` pour les comptes créés par l'admin : le mobile force l'écran de changement avant d'accéder à l'espace.
+> `mustChangePassword=true` pour les comptes créés par l'admin : le mobile force l'écran `/change-password` avant d'accéder à l'espace.
+
+### `POST /auth/refresh`
+
+```json
+{ "refreshToken": "rt_..." }
+```
+
+Réponse identique au login. L'ancien refresh est révoqué et remplacé dans la même `familyId`. Réutiliser un refresh déjà tourné révoque toute la famille et renvoie `401 REFRESH_REUSED`.
+
+### `POST /auth/logout`
+
+```json
+{ "refreshToken": "rt_..." }
+```
+
+Révoque toutes les sessions de la famille. Réponse : `{ "message": "Déconnexion effectuée." }`.
+
+### `POST /auth/otp/request`
+
+```json
+{ "identifier": "+22370000002", "purpose": "phone_verify" }
+```
+
+`purpose` vaut `phone_verify` (SMS) ou `password_reset` (SMS/email). Réponse :
+
+```json
+{ "expiresIn": 300, "message": "Code de vérification envoyé.", "devCode": "482913" }
+```
+
+Cooldown de 60 s par identifiant. Un `429 OTP_COOLDOWN` renvoie `details.retryAfterSeconds`.
+
+### `POST /auth/otp/verify`
+
+```json
+{ "identifier": "+22370000002", "purpose": "phone_verify", "code": "482913" }
+```
+
+Marque le téléphone comme vérifié et renvoie une session complète (même forme que `/auth/login`). 5 tentatives maximum par code ; ensuite `400 OTP_TOO_MANY_ATTEMPTS`.
+
+### `POST /auth/password/forgot` et `POST /auth/password/reset`
+
+```json
+{ "identifier": "client@finiko.ml" }
+```
+
+```json
+{ "identifier": "client@finiko.ml", "code": "482913", "password": "Nouveau@2026" }
+```
+
+La demande renvoie toujours un message générique pour ne pas révéler l'existence du compte. La réinitialisation révoque toutes les sessions.
+
+### `POST /auth/password/change`
+
+```json
+{ "currentPassword": "Ancien@2026", "newPassword": "Nouveau@2026" }
+```
+
+```json
+{
+  "message": "Mot de passe modifié. Toutes les sessions ont été révoquées.",
+  "sessionsRevoked": true
+}
+```
+
+### `GET /auth/me` / `PATCH /auth/me`
+
+`GET` renvoie `{ "user": PublicUser }`. `PATCH` accepte `firstName`, `lastName`, `email` (`null` pour supprimer), `avatarUrl`, `locale` (`fr` ou `bm`).
+
+### Codes d'erreur d'authentification
+
+| Code                    | HTTP | Cause                                         |
+| ----------------------- | ---- | --------------------------------------------- |
+| `VALIDATION_ERROR`      | 400  | Champ manquant ou format invalide             |
+| `INVALID_CREDENTIALS`   | 401  | Identifiant ou mot de passe incorrect         |
+| `ACCOUNT_SUSPENDED`     | 403  | Compte suspendu par un administrateur         |
+| `AUTH_REQUIRED`         | 401  | Access token absent, expiré ou invalide       |
+| `INVALID_REFRESH`       | 401  | Refresh inconnu ou expiré                     |
+| `REFRESH_REUSED`        | 401  | Refresh déjà utilisé : famille révoquée       |
+| `PHONE_TAKEN`           | 409  | Numéro déjà rattaché à un compte              |
+| `EMAIL_TAKEN`           | 409  | Email déjà rattaché à un compte               |
+| `OTP_INVALID`           | 400  | Code faux, expiré ou déjà consommé            |
+| `OTP_TOO_MANY_ATTEMPTS` | 400  | 5 tentatives dépassées                        |
+| `OTP_COOLDOWN`          | 429  | Renvoi demandé trop tôt (`retryAfterSeconds`) |
+| `OTP_SEND_FAILED`       | 502  | Échec du fournisseur SMS/email                |
+| `RATE_LIMITED`          | 429  | Limiteur de débit atteint                     |
 
 ---
 
@@ -813,28 +917,25 @@ Résolution admin :
 
 ## 12. Administration
 
-| Méthode               | Endpoint                            | Rôle  | Description                   |
-| --------------------- | ----------------------------------- | ----- | ----------------------------- |
-| GET                   | `/admin/metrics`                    | admin | KPI dashboard                 |
-| GET                   | `/admin/metrics/timeseries`         | admin | Courbes CA/commandes          |
-| GET                   | `/admin/users`                      | admin | Liste filtrable               |
-| POST                  | `/admin/users`                      | admin | Créer client/livreur/pressing |
-| PATCH                 | `/admin/users/:id`                  | admin | Modifier                      |
-| POST                  | `/admin/users/:id/suspend`          | admin | Suspendre                     |
-| POST                  | `/admin/users/:id/activate`         | admin | Réactiver                     |
-| POST                  | `/admin/users/:id/reset-password`   | admin | Mot de passe temporaire       |
-| GET                   | `/admin/orders`                     | admin | Supervision                   |
-| PATCH                 | `/admin/orders/:id/assign-driver`   | admin | Affectation                   |
-| PATCH                 | `/admin/orders/:id/assign-pressing` | admin | Affectation                   |
-| POST                  | `/admin/orders/:id/cancel`          | admin | Annulation                    |
-| GET                   | `/admin/finance/summary`            | admin | CA, packs, cash               |
-| GET                   | `/admin/finance/transactions`       | admin | Paiements                     |
-| GET                   | `/admin/audit-logs`                 | admin | Journal                       |
-| GET/POST/PATCH/DELETE | `/admin/banners`                    | admin | Bannières                     |
-| GET/POST/PATCH/DELETE | `/admin/zones`                      | admin | Zones de livraison            |
-| GET/PATCH             | `/admin/settings`                   | admin | Configuration                 |
-| GET                   | `/admin/pressings`                  | admin | Partenaires + charge          |
-| GET                   | `/admin/drivers`                    | admin | Livreurs + positions          |
+| Méthode               | Endpoint                            | Rôle  | Description                  |
+| --------------------- | ----------------------------------- | ----- | ---------------------------- |
+| GET                   | `/admin/metrics`                    | admin | KPI dashboard                |
+| GET                   | `/admin/metrics/timeseries`         | admin | Courbes CA/commandes         |
+| GET                   | `/admin/users`                      | admin | Liste filtrable et paginée   |
+| POST                  | `/admin/users`                      | admin | Créer livreur/pressing/admin |
+| PATCH                 | `/admin/users/:id/status`           | admin | Suspendre ou réactiver       |
+| GET                   | `/admin/orders`                     | admin | Supervision                  |
+| PATCH                 | `/admin/orders/:id/assign-driver`   | admin | Affectation                  |
+| PATCH                 | `/admin/orders/:id/assign-pressing` | admin | Affectation                  |
+| POST                  | `/admin/orders/:id/cancel`          | admin | Annulation                   |
+| GET                   | `/admin/finance/summary`            | admin | CA, packs, cash              |
+| GET                   | `/admin/finance/transactions`       | admin | Paiements                    |
+| GET                   | `/admin/audit-logs`                 | admin | Journal                      |
+| GET/POST/PATCH/DELETE | `/admin/banners`                    | admin | Bannières                    |
+| GET/POST/PATCH/DELETE | `/admin/zones`                      | admin | Zones de livraison           |
+| GET/PATCH             | `/admin/settings`                   | admin | Configuration                |
+| GET                   | `/admin/pressings`                  | admin | Partenaires + charge         |
+| GET                   | `/admin/drivers`                    | admin | Livreurs + positions         |
 
 ### `GET /admin/metrics`
 
@@ -872,6 +973,18 @@ Résolution admin :
 }
 ```
 
+### `GET /admin/users`
+
+Paramètres : `role` (`client|livreur|pressing|admin`), `status` (`actif|suspendu|supprime`), `q` (nom, téléphone, email), `page` (défaut 1), `limit` (défaut 20, max 100).
+
+```json
+{
+  "success": true,
+  "data": { "users": [{ "id": "66f...", "role": "livreur", "fullName": "Oumar Diallo" }] },
+  "meta": { "page": 1, "limit": 20, "total": 1, "totalPages": 1 }
+}
+```
+
 ### `POST /admin/users`
 
 ```json
@@ -881,18 +994,39 @@ Résolution admin :
   "lastName": "Diarra",
   "phone": "+22370000010",
   "email": "koulouba@finiko.ml",
-  "temporaryPassword": "Temp@2026!",
-  "pressingProfile": {
+  "password": "Temp@2026!",
+  "mustChangePassword": true,
+  "pressing": {
     "businessName": "Pressing Koulouba",
     "addressText": "Koulouba, Bamako",
-    "coordinates": { "lat": 12.6501, "lng": -8.0123 },
-    "capacityPerDay": 120,
-    "commissionRate": 0.2
+    "location": { "lat": 12.6501, "lng": -8.0123 },
+    "capacity": 120
   }
 }
 ```
 
-Réponse `201` avec l'utilisateur créé ; le mot de passe temporaire n'est **jamais** renvoyé en clair une seconde fois. Un SMS d'invitation est envoyé.
+Pour un livreur, remplacer `pressing` par `driver` :
+
+```json
+{
+  "role": "livreur",
+  "firstName": "Oumar",
+  "lastName": "Diallo",
+  "phone": "+22370000001",
+  "password": "Temp@2026!",
+  "driver": { "vehicleType": "moto", "plate": "AB-1234", "zoneCodes": ["koulouba"] }
+}
+```
+
+Réponse `201` : `{ "user": PublicUser, "profile": { "code": "FK-P-001", ... } }`. Le mot de passe n'est **jamais** renvoyé. Le titulaire doit le changer à la première connexion (`mustChangePassword`).
+
+### `PATCH /admin/users/:id/status`
+
+```json
+{ "status": "suspendu", "reason": "Litige non résolu" }
+```
+
+Suspendre révoque immédiatement toutes les sessions de l'utilisateur. Un administrateur ne peut pas se suspendre lui-même (`409 SELF_SUSPEND`) ni suspendre le dernier admin actif (`409 LAST_ADMIN`).
 
 ---
 

@@ -28,13 +28,15 @@ pnpm test
 pnpm build
 ```
 
-**Points d'entrée API** : `GET /health` (liveness), `GET /ready` (MongoDB), `GET /api/v1` (descripteur).
+**Points d'entrée API** : `GET /health` (liveness), `GET /ready` (MongoDB), `GET /api/v1` (descripteur). Authentification : `/api/v1/auth/register`, `/login`, `/refresh`, `/logout`, `/otp/request`, `/otp/verify`, `/password/forgot`, `/password/reset`, `/password/change`, `/me`. Administration des comptes : `/api/v1/admin/users`.
+
+> En développement, `OTP_EXPOSE_CODE=true` renvoie le code SMS dans la réponse et l'écran de vérification l'affiche. En production, le code part uniquement par SMS et cette option est refusée au démarrage.
 
 > Sur un appareil physique, remplacer `EXPO_PUBLIC_API_URL` par l'IP LAN du poste (`http://192.168.x.x:3000/api/v1`). L'émulateur Android utilise `10.0.2.2`.
 >
-> Sans Docker, un MongoDB local en mode standalone permet de tester `/health` et `/ready`, mais **pas** les transactions du moteur de quota : il faut un replica set pour les lots 2 et suivants.
+> Sans Docker, un MongoDB local en mode standalone permet de tester `/health`, `/ready` et l'authentification, mais **pas** les transactions du moteur de quota : il faut un replica set pour les lots 2 et suivants.
 
-**Contenu du socle** : monorepo pnpm, contrats Zod partagés, API Express 5 + Mongoose avec santé, erreurs normalisées, logs Pino, rate limit et CORS, app Expo Router avec écran d'accueil et formulaire de connexion validé par les contrats, CI GitHub Actions, Docker MongoDB replica set + Redis.
+**Contenu livré** : monorepo pnpm, contrats Zod partagés, API Express 5 + Mongoose avec santé, erreurs normalisées, logs Pino, rate limit et CORS ; **lot 1 authentification** (inscription client, login email/téléphone, Argon2id, JWT + refresh rotatif par famille, OTP SMS, mot de passe oublié, changement forcé, RBAC, audit, gestion admin des comptes) ; app Expo Router avec accueil, connexion, inscription, OTP, mot de passe oublié, changement de mot de passe et espace authentifié ; CI GitHub Actions ; Docker MongoDB replica set + Redis.
 
 ---
 
@@ -62,7 +64,7 @@ Le produit est pensé **mobile-first Android**, en français, avec une connexion
 | UI                   | **StyleSheet + design system maison**                                      | Tokens centralisés, zéro dépendance de styling supplémentaire ; NativeWind est reporté après validation de sa compatibilité avec RN 0.88. |
 | État serveur         | **TanStack Query v5**                                                      | Cache, invalidation, retry, offline partiel, mutations optimistes.                                                                        |
 | État local           | **Zustand** (auth, panier/brouillon, préférences)                          | Léger, sans boilerplate, adapté à React 19.                                                                                               |
-| Formulaires          | **React Hook Form + Zod**                                                  | Validation partagée avec l'API.                                                                                                           |
+| Formulaires          | **Zod partagé**, puis React Hook Form pour les formulaires métier          | Validation identique mobile/API ; les écrans d'auth du lot 1 utilisent un état local minimal.                                             |
 | Backend              | **Node.js 24 LTS + Express 5 + TypeScript 6 strict**                       | Simplicité, écosystème, continuité v1 ; monolithe modulaire suffisant pour le MVP.                                                        |
 | Base de données      | **MongoDB 7 (replica set Atlas)**                                          | Flexible pour le catalogue, géo-indexation native, transactions multi-documents.                                                          |
 | Cache / files        | **Redis 7 + BullMQ**                                                       | Vérrous/idempotence, jobs de paiement, notifications, expirations.                                                                        |
@@ -142,7 +144,7 @@ Le v1 est une bonne base de démonstration, mais il lui manque les briques criti
 └── README.md
 ```
 
-> Le socle applicatif est scaffoldé et validé (lint, typecheck, tests, build, export web Expo). Les lots 1 (auth) et 2 (quota) sont les prochaines étapes (voir [`docs/08-roadmap.md`](docs/08-roadmap.md)).
+> Le socle et le **lot 1 (authentification, comptes, profils)** sont scaffoldés et validés (lint, typecheck, tests, build, export web Expo). Le lot 2 (catalogue, packs, moteur de quota transactionnel) est la prochaine étape (voir [`docs/08-roadmap.md`](docs/08-roadmap.md)).
 
 ---
 
@@ -186,13 +188,17 @@ Le v1 est une bonne base de démonstration, mais il lui manque les briques criti
 
 ## 8. État et prochaine étape
 
-Le socle est en place et vérifié :
+Le socle et le lot 1 sont en place et vérifiés :
 
 1. ✅ Monorepo + `packages/contracts` + Docker (Mongo replica set, Redis) + CI.
 2. ✅ API : santé, enveloppe de réponse, erreurs, logs, CORS, rate limit.
-3. ✅ Mobile : Expo Router, thème, client API, store d'auth, écran de connexion validé par Zod.
-4. ⏭️ Lot 1 : `users`, auth email/téléphone, refresh, RBAC + tests.
+3. ✅ Mobile : Expo Router, thème, client API, store d'auth, écrans login/register/OTP/mot de passe oublié/changement.
+4. ✅ Lot 1 : `users`, auth email/téléphone, Argon2id, JWT + refresh rotatif, OTP, RBAC, audit, admin comptes, tests d'intégration.
 5. ⏭️ Lot 2 : `catalog`, `packs`, `subscriptions` + moteur de quota transactionnel.
 6. ⏭️ Lot 4 : adaptateur Orange Money sandbox + webhook idempotent.
 7. ⏭️ Lot 5 : tunnel de commande mobile, suivi, espaces livreur/pressing.
 8. ⏭️ Lot 6 : dashboard admin, litiges, audit, puis pilote fermé sur Bamako.
+
+**Comptes** : l'inscription publique crée uniquement des clients. Les comptes livreur, pressing et administrateur passent par `POST /api/v1/admin/users` ; leur mot de passe est temporaire et un changement est imposé à la première connexion.
+
+**OTP en développement** : le code à 6 chiffres est renvoyé par l'API (`devCode`) et affiché sur l'écran de vérification. Le cooldown de renvoi est de 60 secondes, la validité de 5 minutes et le maximum de 5 tentatives.

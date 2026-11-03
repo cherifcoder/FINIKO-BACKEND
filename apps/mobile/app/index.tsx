@@ -1,6 +1,7 @@
-import { Link } from 'expo-router';
+import { Link, Redirect } from 'expo-router';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuthStore } from '../src/stores/auth.store';
 import { colors, radius, spacing, typography } from '../src/theme/tokens';
 
 const roles = [
@@ -23,17 +24,32 @@ const roles = [
 ];
 
 export default function HomeScreen() {
+  const status = useAuthStore((state) => state.status);
+
+  if (status === 'authenticated') {
+    return <Redirect href="/(app)/accueil" />;
+  }
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.badge}>
-          <Text style={styles.badgeText}>Socle v2 · Sprint 0</Text>
+          <Text style={styles.badgeText}>Lot 1 · Authentification</Text>
         </View>
 
         <Text style={styles.title}>FINIKO</Text>
         <Text style={styles.subtitle}>
           Blanchisserie et pressing à Bamako. Quatre espaces, une seule plateforme.
         </Text>
+
+        <View style={styles.actions}>
+          <Link href="/(auth)/register" style={styles.primaryCta}>
+            Créer un compte client
+          </Link>
+          <Link href="/(auth)/login" style={styles.secondaryCta}>
+            J'ai déjà un compte
+          </Link>
+        </View>
 
         <View style={styles.roles}>
           {roles.map((role) => (
@@ -44,13 +60,10 @@ export default function HomeScreen() {
           ))}
         </View>
 
-        <Link href="/(auth)/login" style={styles.cta}>
-          Ouvrir l'écran de connexion
-        </Link>
-
         <Text style={styles.note}>
-          Ce build valide le monorepo, les contrats partagés et le thème. L'authentification réelle
-          arrive au lot 1.
+          L'inscription est ouverte aux clients. Les comptes livreur, pressing et administrateur
+          sont créés par un administrateur, puis protégés par un changement de mot de passe à la
+          première connexion.
         </Text>
       </ScrollView>
     </SafeAreaView>
@@ -90,6 +103,33 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textMuted,
   },
+  actions: {
+    gap: spacing.sm,
+  },
+  primaryCta: {
+    backgroundColor: colors.brand[600],
+    borderRadius: radius.md,
+    color: colors.surface,
+    fontSize: 16,
+    fontWeight: '700',
+    overflow: 'hidden',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    textAlign: 'center',
+  },
+  secondaryCta: {
+    backgroundColor: colors.surface,
+    borderColor: colors.brand[600],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    color: colors.brand[700],
+    fontSize: 16,
+    fontWeight: '700',
+    overflow: 'hidden',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    textAlign: 'center',
+  },
   roles: {
     gap: spacing.sm,
   },
@@ -112,17 +152,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     color: colors.textMuted,
-  },
-  cta: {
-    backgroundColor: colors.brand[600],
-    borderRadius: radius.md,
-    color: colors.surface,
-    fontSize: 16,
-    fontWeight: '700',
-    overflow: 'hidden',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    textAlign: 'center',
   },
   note: {
     ...typography.caption,

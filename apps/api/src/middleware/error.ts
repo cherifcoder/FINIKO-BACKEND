@@ -30,6 +30,14 @@ export class ApiError extends Error {
     return new ApiError(404, 'NOT_FOUND', message);
   }
 
+  static tooManyRequests(code: string, message: string, details?: unknown): ApiError {
+    return new ApiError(429, code, message, details);
+  }
+
+  static badGateway(code: string, message: string, details?: unknown): ApiError {
+    return new ApiError(502, code, message, details);
+  }
+
   static conflict(code: string, message: string, details?: unknown): ApiError {
     return new ApiError(409, code, message, details);
   }

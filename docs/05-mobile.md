@@ -36,11 +36,15 @@ app/
 │   ├── onboarding.tsx               # 3 slides valeur produit
 │   └── legal.tsx                    # CGU, confidentialité
 ├── (auth)/
+│   ├── _layout.tsx
 │   ├── login.tsx
 │   ├── register.tsx
 │   ├── otp.tsx
-│   ├── forgot-password.tsx
-│   └── reset-password.tsx
+│   └── forgot-password.tsx           # demande + code + nouveau mot de passe
+├── (app)/                            # espace authentifié du lot 1
+│   ├── _layout.tsx                   # garde de session + mustChangePassword
+│   ├── accueil.tsx
+│   └── change-password.tsx
 ├── (client)/
 │   ├── _layout.tsx
 │   ├── (tabs)/
@@ -193,14 +197,16 @@ export const queryKeys = {
 ### 3.4 Zustand
 
 ```ts
-// stores/auth.store.ts
+// stores/auth.store.ts — implémentation lot 1
 interface AuthState {
-  user: SessionUser | null;
+  user: PublicUser | null;
   accessToken: string | null;
-  status: 'idle' | 'loading' | 'authenticated' | 'guest';
-  login: (payload: LoginInput) => Promise<void>;
-  logout: () => Promise<void>;
-  hydrate: () => Promise<void>;
+  refreshToken: string | null;
+  status: 'loading' | 'anonymous' | 'authenticated';
+  hydrate: () => Promise<void>; // lit SecureStore au démarrage
+  setSession: (session: AuthSession) => void; // login, refresh, OTP
+  setUser: (user: PublicUser) => void;
+  clear: () => Promise<void>; // logout, suspension, mot de passe changé
 }
 
 // stores/draft-order.store.ts
@@ -220,6 +226,8 @@ interface DraftOrderState {
 ```
 
 Le brouillon est persisté (MMKV) mais **jamais** les prix : ils sont toujours issus du devis serveur.
+
+Pour l'authentification, les jetons sont stockés via `expo-secure-store` (localStorage sur le web) et jamais dans l'état persistant Zustand. Le client API attache le Bearer et effectue un refresh single-flight sur `401`.
 
 ---
 
