@@ -408,15 +408,30 @@ export const typography = {
 - Bouton « Annuler » visible uniquement si `actions.canCancel`.
 - Preuve photo à la livraison.
 
-### 5.4 Client — Packs
+### 5.4 Client — Catalogue
 
-- Liste verticale de `PackCard` : nom, prix/mois, quota, prestations incluses, avantages, badge.
-- Comparateur simple (tableau) en bas.
-- Bouton « Souscrire » → confirmation → OM.
-- Si abonnement actif : bandeau « Votre pack actuel », bouton « Renouveler » (programmé).
-- Historique des abonnements et ledger de quota.
+- Liste chargée depuis `GET /catalog/items`, filtrée par catégorie (`Tout`, Homme, Femme, Enfant, Maison, Blanchiment).
+- Chaque `CatalogItemCard` affiche le nom, la matière, le poids de quota et **les trois tarifs** : lavage seul, repassage seul, lavage + repassage.
+- Les prestations non disponibles pour un article sont masquées ; le prix affiché provient toujours du catalogue serveur.
+- États : chargement, erreur avec « Réessayer », catégorie vide avec message explicite.
+- La sélection d'articles et le panier seront branchés au lot 3.
 
-### 5.5 Livreur — Dashboard & mission
+### 5.5 Client — Packs
+
+- Liste verticale de `PackCard` : nom, prix/période, quota, prestations incluses, avantages, badge, livraison incluse ou remisée.
+- Bouton « Souscrire » → confirmation native → `POST /subscriptions`. Le paiement Orange Money sera branché au lot 4 ; la souscription est créée `en_attente_paiement`.
+- Si abonnement actif : bandeau « Votre pack actuel » avec jauge de quota, dates et bouton « Gérer mon abonnement » ; les autres packs proposent « Programmer ce pack » (`programmee`).
+- Si souscription en attente ou renouvellement programmé : bandeau dédié et accès à l'écran Abonnement.
+
+### 5.6 Client — Abonnement
+
+- Vue `GET /subscriptions/me` : abonnement actif, en attente et programmé.
+- Jauge de quota : consommé, réservé, disponible.
+- Historique `GET /subscriptions/me/usage` : type de mouvement, date, deltas, soldes après opération.
+- « Annuler le renouvellement » sur un abonnement actif conserve le quota jusqu'à `endDate` ; une souscription en attente ou programmée passe à `annulee`.
+- États vides : aucun abonnement (CTA vers les packs), aucun mouvement.
+
+### 5.7 Livreur — Dashboard & mission
 
 ```text
 ┌─────────────────────────────────────┐
@@ -449,7 +464,7 @@ export const typography = {
 3. Remise : photo, nom du destinataire, cash éventuel.
 4. Statut `livree`.
 
-### 5.6 Pressing — Kanban
+### 5.8 Pressing — Kanban
 
 ```text
 ┌─────────────────────────────────────┐
@@ -472,7 +487,7 @@ export const typography = {
 - Bouton sticky « Déclarer prêt » désactivé tant que tout n'est pas terminé.
 - Signalement d'écart accessible depuis le menu.
 
-### 5.7 Admin — Dashboard
+### 5.9 Admin — Dashboard
 
 ```text
 ┌─────────────────────────────────────┐
@@ -500,7 +515,7 @@ export const typography = {
 
 **Onglet « Plus »** : catalogue, packs, utilisateurs, livreurs, pressings, bannières, zones, litiges, audit, paramètres, déconnexion.
 
-### 5.8 Écrans partagés
+### 5.10 Écrans partagés
 
 - **Notifications** : liste groupée par jour, badge non lu, tap → deep link.
 - **Paiement callback** : écran de vérification (spinner + « Nous vérifions votre paiement… »), puis succès/échec. Jamais de validation sur simple retour.

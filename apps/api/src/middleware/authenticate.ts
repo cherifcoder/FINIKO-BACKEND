@@ -60,6 +60,19 @@ export const authenticate: RequestHandler = async (
   }
 };
 
+/**
+ * Authentifie si un Bearer est présent, sinon laisse passer en anonyme.
+ * Utilisé par les lectures publiques qui exposent plus de champs aux admins.
+ */
+export const optionalAuthenticate: RequestHandler = (req, res, next) => {
+  if (!req.headers.authorization) {
+    next();
+    return;
+  }
+
+  void authenticate(req, res, next);
+};
+
 export function requireRole(...roles: UserRole[]): RequestHandler {
   return (req: Request, _res: Response, next: NextFunction) => {
     if (!req.auth) {

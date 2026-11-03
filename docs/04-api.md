@@ -312,14 +312,14 @@ La demande renvoie toujours un message générique pour ne pas révéler l'exist
 
 ## 4. Catalogue
 
-| Méthode | Endpoint                    | Rôle        | Description                           |
-| ------- | --------------------------- | ----------- | ------------------------------------- |
-| GET     | `/catalog/items`            | public/auth | Liste active, filtres `category`, `q` |
-| GET     | `/catalog/items/:id`        | public/auth | Détail + prix                         |
-| POST    | `/catalog/items`            | admin       | Créer                                 |
-| PATCH   | `/catalog/items/:id`        | admin       | Modifier (prix, poids, visuel…)       |
-| DELETE  | `/catalog/items/:id`        | admin       | Désactivation logique                 |
-| PATCH   | `/catalog/items/:id/status` | admin       | Activer/désactiver                    |
+| Méthode | Endpoint                    | Rôle        | Description                                                      |
+| ------- | --------------------------- | ----------- | ---------------------------------------------------------------- |
+| GET     | `/catalog/items`            | public/auth | Liste active, filtres `category`, `q`, `includeInactive` (admin) |
+| GET     | `/catalog/items/:id`        | public/auth | Détail + prix                                                    |
+| POST    | `/catalog/items`            | admin       | Créer                                                            |
+| PATCH   | `/catalog/items/:id`        | admin       | Modifier (prix, poids, visuel…)                                  |
+| DELETE  | `/catalog/items/:id`        | admin       | Suppression logique (`deletedAt`)                                |
+| PATCH   | `/catalog/items/:id/status` | admin       | Activer/désactiver                                               |
 
 ### `POST /catalog/items`
 
@@ -339,25 +339,26 @@ La demande renvoie toujours un message générique pour ne pas révéler l'exist
 }
 ```
 
-**Règles** : les 3 prix sont obligatoires et entiers ≥ 0 ; `quotaWeight` entier 1–10 ; le code est unique et immuable après création (ou versionné).
+**Règles** : les 3 prix sont obligatoires et entiers **strictement positifs** ; `quotaWeight` entier 1–10 ; `availableTreatments` est un sous-ensemble non vide des trois prestations ; le code est unique et immuable après création. `PATCH` n'applique aucune valeur par défaut : seuls les champs transmis sont modifiés. `includeInactive=true` est réservé aux administrateurs (403 sinon) ; un article supprimé logiquement reste masqué, même avec ce filtre.
 
 ---
 
 ## 5. Packs et abonnements
 
-| Méthode | Endpoint                          | Rôle        | Description                  |
-| ------- | --------------------------------- | ----------- | ---------------------------- |
-| GET     | `/packs`                          | public/auth | Packs actifs                 |
-| GET     | `/packs/:id`                      | public/auth | Détail                       |
-| POST    | `/packs`                          | admin       | Créer                        |
-| PATCH   | `/packs/:id`                      | admin       | Modifier                     |
-| DELETE  | `/packs/:id`                      | admin       | Désactiver                   |
-| GET     | `/subscriptions/me`               | client      | Abonnement actif + programmé |
-| GET     | `/subscriptions/me/usage`         | client      | Ledger de quota paginé       |
-| POST    | `/subscriptions`                  | client      | Souscrire                    |
-| POST    | `/subscriptions/:id/cancel`       | client      | Annuler le renouvellement    |
-| GET     | `/subscriptions`                  | admin       | Liste filtrable              |
-| POST    | `/subscriptions/:id/adjust-quota` | admin       | Ajustement tracé             |
+| Méthode | Endpoint                          | Rôle        | Description                                       |
+| ------- | --------------------------------- | ----------- | ------------------------------------------------- |
+| GET     | `/packs`                          | public/auth | Packs actifs, `includeInactive` réservé à l'admin |
+| GET     | `/packs/:id`                      | public/auth | Détail                                            |
+| POST    | `/packs`                          | admin       | Créer                                             |
+| PATCH   | `/packs/:id`                      | admin       | Modifier (sans réappliquer les défauts)           |
+| PATCH   | `/packs/:id/status`               | admin       | Activer/désactiver                                |
+| DELETE  | `/packs/:id`                      | admin       | Suppression logique (`deletedAt`)                 |
+| GET     | `/subscriptions/me`               | client      | Abonnement actif, programmé et en attente         |
+| GET     | `/subscriptions/me/usage`         | client      | Ledger de quota paginé                            |
+| POST    | `/subscriptions`                  | client      | Souscrire                                         |
+| POST    | `/subscriptions/:id/cancel`       | client      | Annuler le renouvellement ou une souscription     |
+| GET     | `/subscriptions`                  | admin       | Liste filtrable                                   |
+| POST    | `/subscriptions/:id/adjust-quota` | admin       | Ajustement signé de `quotaTotal`                  |
 
 ### `POST /subscriptions`
 
@@ -365,32 +366,42 @@ La demande renvoie toujours un message générique pour ne pas révéler l'exist
 { "packId": "66f...", "paymentMethod": "orange_money" }
 ```
 
-Réponse `202` :
+`paymentMethod` vaut `orange_money` (défaut) ou `cash`. Réponse `202` :
 
 ```json
 {
   "success": true,
+  "message": "Souscription créée, en attente de paiement.",
   "data": {
     "subscription": {
       "id": "66f...",
       "status": "en_attente_paiement",
-      "pack": { "code": "normal", "name": "Pack Normal", "quotaUnits": 10 },
+      "pack": {
+        "id": "66e...",
+        "code": "normal",
+        "name": "Pack Normal",
+        "quotaUnits": 10,
+        "priceXOF": 11000,
+        "billingPeriodDays": 30,
+        "includedTreatments": ["lavage", "repassage", "lavage_repassage"],
+        "deliveryIncluded": false,
+        "deliveryDiscountPercent": 0
+      },
       "startDate": "2026-11-05T00:00:00.000Z",
       "endDate": "2026-12-05T00:00:00.000Z",
       "quotaTotal": 10,
       "quotaUsed": 0,
-      "quotaReserved": 0
-    },
-    "payment": {
-      "id": "66f...",
-      "reference": "PAY-20261102-0007",
-      "amountXOF": 11000,
-      "status": "en_attente",
-      "checkoutUrl": "https://orange-money.../pay/..."
+      "quotaReserved": 0,
+      "quotaAvailable": 10,
+      "autoRenew": false,
+      "activatedAt": null,
+      "cancelledAt": null
     }
   }
 }
 ```
+
+À ce lot, **aucun objet `payment` n'est renvoyé** : l'initialisation Orange Money et le webhook arrivent au lot 4. Le statut est `en_attente_paiement` si le client n'a pas d'abonnement actif, `programmee` s'il en a déjà un. Un pack supprimé renvoie `404` ; un pack inactif ou hors période renvoie `422 PACK_INACTIVE` ; une souscription déjà en attente renvoie `409 SUBSCRIPTION_PENDING`.
 
 ### `GET /subscriptions/me`
 
@@ -406,14 +417,81 @@ Réponse `202` :
       "endDate": "2026-12-05T00:00:00.000Z",
       "quotaTotal": 10,
       "quotaUsed": 7,
-      "quotaReserved": 0,
-      "quotaAvailable": 3,
-      "autoRenew": false
+      "quotaReserved": 1,
+      "quotaAvailable": 2,
+      "autoRenew": false,
+      "cancelledAt": null
     },
+    "pending": null,
     "scheduled": null
   }
 }
 ```
+
+`pending` contient la souscription `en_attente_paiement` ; `scheduled` contient le renouvellement `programmee`. Les trois champs peuvent être `null`.
+
+### `GET /subscriptions/me/usage`
+
+Paramètres : `page`, `limit`, `subscriptionId` optionnel. Réponse :
+
+```json
+{
+  "success": true,
+  "data": {
+    "usages": [
+      {
+        "id": "66u...",
+        "subscriptionId": "66f...",
+        "type": "consommation",
+        "units": 2,
+        "usedDelta": 2,
+        "reservedDelta": -2,
+        "quotaTotalDelta": 0,
+        "quotaUsedAfter": 7,
+        "quotaReservedAfter": 0,
+        "quotaTotalAfter": 10,
+        "reason": "",
+        "orderId": "66o...",
+        "createdAt": "2026-11-12T09:30:00.000Z"
+      }
+    ]
+  },
+  "meta": { "page": 1, "limit": 20, "total": 1, "totalPages": 1 }
+}
+```
+
+### `POST /subscriptions/:id/cancel`
+
+Corps : `{ "reason": "Changement d'avis" }`. Pour un abonnement `active`, l'appel annule uniquement le renouvellement : le statut reste `active`, `autoRenew` passe à `false`, `cancelledAt` est renseigné et le quota reste utilisable jusqu'à `endDate` (`renewalCancelled: true`). Pour une souscription `en_attente_paiement` ou `programmee`, elle passe à `annulee` (`renewalCancelled: false`).
+
+### `POST /subscriptions/:id/adjust-quota`
+
+Corps : `{ "units": 2, "reason": "Geste commercial" }`. `units` est un entier **signé non nul** appliqué à `quotaTotal`. La réponse contient la souscription mise à jour ; le ledger enregistre `quotaTotalDelta` et `quotaTotalAfter`. Un delta négatif qui ferait passer `quotaTotal` sous `quotaUsed + quotaReserved` renvoie `409 QUOTA_ADJUSTMENT_INVALID`.
+
+### Codes d'erreur catalogue, packs et quota
+
+| Code                             | HTTP | Cause                                                          |
+| -------------------------------- | ---- | -------------------------------------------------------------- |
+| `VALIDATION_ERROR`               | 400  | Prix partiel, poids hors bornes, patch vide, unités invalides  |
+| `CATALOG_CODE_TAKEN`             | 409  | Code catalogue déjà utilisé                                    |
+| `PACK_CODE_TAKEN`                | 409  | Code pack déjà utilisé                                         |
+| `INVALID_PACK_PERIOD`            | 422  | `validTo` antérieure ou égale à `validFrom`                    |
+| `PACK_INACTIVE`                  | 422  | Pack inactif ou hors période de validité                       |
+| `SUBSCRIPTION_PENDING`           | 409  | Une souscription est déjà en attente de paiement               |
+| `SUBSCRIPTION_ALREADY_SCHEDULED` | 409  | Un renouvellement est déjà programmé                           |
+| `SUBSCRIPTION_ALREADY_ACTIVE`    | 409  | Activation demandée sur un abonnement actif                    |
+| `SUBSCRIPTION_NOT_ACTIVATABLE`   | 422  | Statut incompatible avec une activation                        |
+| `SUBSCRIPTION_NOT_STARTED`       | 422  | Date de début non atteinte                                     |
+| `SUBSCRIPTION_NOT_CANCELLABLE`   | 409  | Statut incompatible avec une annulation                        |
+| `SUBSCRIPTION_INACTIVE`          | 422  | Opération de quota sur un abonnement qui n'est plus actif      |
+| `QUOTA_EXHAUSTED`                | 409  | Le quota disponible ne couvre pas les unités demandées         |
+| `QUOTA_RESERVATION_NOT_FOUND`    | 409  | Consommation/libération sans réservation préalable             |
+| `QUOTA_CONSUMPTION_NOT_FOUND`    | 409  | Remboursement sans consommation préalable                      |
+| `QUOTA_ALREADY_CONSUMED`         | 409  | Libération d'une réservation déjà consommée                    |
+| `QUOTA_RESERVATION_RELEASED`     | 409  | Consommation d'une réservation déjà libérée                    |
+| `QUOTA_STATE_INVALID`            | 409  | Transition de quota impossible                                 |
+| `IDEMPOTENCY_CONFLICT`           | 409  | Même commande rejouée avec un nombre d'unités différent        |
+| `QUOTA_ADJUSTMENT_INVALID`       | 409  | Ajustement négatif incompatible avec le quota consommé/réservé |
 
 ---
 

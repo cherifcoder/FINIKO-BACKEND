@@ -1,16 +1,19 @@
+import { useQuery } from '@tanstack/react-query';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getMeRequest, logoutRequest } from '../../src/api/auth';
 import { ApiClientError } from '../../src/api/client';
-import { formatDate } from '../../src/lib/format';
+import { getMySubscriptionsRequest } from '../../src/api/packs';
+import { formatDate, formatXOF } from '../../src/lib/format';
 import { roleLabel, useAuthStore } from '../../src/stores/auth.store';
 import { DangerButton, InlineMessage, SecondaryButton } from '../../src/ui/auth';
+import { QuotaBar } from '../../src/ui/screen';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
 
 const NEXT_STEPS: Record<string, string> = {
-  client: 'Le catalogue, les packs et la commande en ligne arrivent au lot 2.',
+  client: 'Choisissez un pack, parcourez le catalogue et suivez votre quota en temps réel.',
   livreur: 'Les missions de ramassage et le guidage GPS arrivent au lot 5.',
   pressing: 'La réception et le traitement article par article arrivent au lot 5.',
   admin: "Le pilotage du catalogue, des comptes et du chiffre d'affaires arrive au lot 6.",
@@ -23,6 +26,12 @@ export default function AccueilScreen() {
 
   const [error, setError] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
+
+  const subscriptionsQuery = useQuery({
+    queryKey: ['subscriptions', 'me'],
+    queryFn: getMySubscriptionsRequest,
+    enabled: user?.role === 'client',
+  });
 
   useFocusEffect(
     useCallback(() => {
@@ -115,6 +124,72 @@ export default function AccueilScreen() {
           />
         </View>
 
+        {user.role === 'client' ? (
+          <>
+            {subscriptionsQuery.data?.active ? (
+              <View style={[styles.card, styles.packCard]}>
+                <View style={styles.packHeader}>
+                  <View style={styles.packHeaderText}>
+                    <Text style={styles.packEyebrow}>Mon pack</Text>
+                    <Text style={styles.packName}>{subscriptionsQuery.data.active.pack.name}</Text>
+                    <Text style={styles.packMeta}>
+                      {formatXOF(subscriptionsQuery.data.active.pack.priceXOF)} · fin le{' '}
+                      {formatDate(subscriptionsQuery.data.active.endDate)}
+                    </Text>
+                  </View>
+                  <View style={styles.packBadge}>
+                    <Text style={styles.packBadgeText}>Actif</Text>
+                  </View>
+                </View>
+
+                <QuotaBar
+                  used={subscriptionsQuery.data.active.quotaUsed}
+                  total={subscriptionsQuery.data.active.quotaTotal}
+                  reserved={subscriptionsQuery.data.active.quotaReserved}
+                />
+
+                <SecondaryButton
+                  label="Voir mon abonnement"
+                  onPress={() => router.push('/(app)/abonnement')}
+                />
+              </View>
+            ) : (
+              <View style={[styles.card, styles.packCard]}>
+                <Text style={styles.packEyebrow}>Packs & abonnements</Text>
+                <Text style={styles.packName}>Un quota mensuel pour votre linge</Text>
+                <Text style={styles.packMeta}>
+                  Choisissez un pack adapté à votre foyer et suivez chaque unité utilisée.
+                </Text>
+                <SecondaryButton
+                  label="Découvrir les packs"
+                  onPress={() => router.push('/(app)/packs')}
+                />
+              </View>
+            )}
+
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Mes services</Text>
+              <View style={styles.shortcuts}>
+                <Shortcut
+                  label="Packs"
+                  detail="Quota mensuel"
+                  onPress={() => router.push('/(app)/packs')}
+                />
+                <Shortcut
+                  label="Catalogue"
+                  detail="3 tarifs par article"
+                  onPress={() => router.push('/(app)/catalogue')}
+                />
+                <Shortcut
+                  label="Abonnement"
+                  detail="Quota & historique"
+                  onPress={() => router.push('/(app)/abonnement')}
+                />
+              </View>
+            </View>
+          </>
+        ) : null}
+
         <View style={styles.notice}>
           <Text style={styles.noticeTitle}>Et maintenant ?</Text>
           <Text style={styles.noticeText}>
@@ -158,6 +233,27 @@ function ProfileRow({ label, value, tone = 'default' }: ProfileRowProps) {
         {value}
       </Text>
     </View>
+  );
+}
+
+function Shortcut({
+  label,
+  detail,
+  onPress,
+}: {
+  label: string;
+  detail: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.shortcut, pressed && styles.shortcutPressed]}
+    >
+      <Text style={styles.shortcutLabel}>{label}</Text>
+      <Text style={styles.shortcutDetail}>{detail}</Text>
+    </Pressable>
   );
 }
 
@@ -228,6 +324,78 @@ const styles = StyleSheet.create({
     fontSize: 18,
     lineHeight: 24,
     color: colors.text,
+  },
+  packCard: {
+    backgroundColor: colors.brand[50],
+    borderColor: colors.brand[100],
+  },
+  packHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between',
+  },
+  packHeaderText: {
+    flex: 1,
+    gap: 2,
+  },
+  packEyebrow: {
+    ...typography.caption,
+    color: colors.brand[700],
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  packName: {
+    ...typography.title,
+    color: colors.brand[900],
+    fontSize: 20,
+    lineHeight: 26,
+  },
+  packMeta: {
+    ...typography.caption,
+    color: colors.brand[700],
+  },
+  packBadge: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 2,
+  },
+  packBadgeText: {
+    ...typography.caption,
+    color: colors.success,
+    fontWeight: '700',
+  },
+  shortcuts: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  shortcut: {
+    backgroundColor: colors.background,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    flex: 1,
+    gap: spacing.xs,
+    justifyContent: 'space-between',
+    minHeight: 86,
+    padding: spacing.md,
+  },
+  shortcutPressed: {
+    opacity: 0.75,
+  },
+  shortcutLabel: {
+    ...typography.body,
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 20,
+  },
+  shortcutDetail: {
+    ...typography.caption,
+    color: colors.textMuted,
+    fontSize: 11,
+    lineHeight: 15,
   },
   row: {
     alignItems: 'center',

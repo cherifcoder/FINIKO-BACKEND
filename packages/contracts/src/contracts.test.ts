@@ -2,11 +2,17 @@ import { describe, expect, it } from 'vitest';
 import {
   adminCreateUserSchema,
   canTransitionOrder,
+  catalogItemInputSchema,
+  catalogItemUpdateSchema,
   changePasswordSchema,
   loginSchema,
+  packInputSchema,
+  packUpdateSchema,
   phoneSchema,
   quoteRequestSchema,
   registerSchema,
+  subscriptionAdjustQuotaSchema,
+  subscriptionCreateSchema,
   updateProfileSchema,
 } from './index';
 
@@ -148,6 +154,75 @@ describe('quoteRequestSchema', () => {
   it('refuse un panier vide', () => {
     const result = quoteRequestSchema.safeParse({ items: [], pickup, delivery: pickup });
     expect(result.success).toBe(false);
+  });
+});
+
+describe('contrats catalogue et packs', () => {
+  const catalogPayload = {
+    code: 'boubou',
+    name: 'Boubou',
+    category: 'femme',
+    prices: { lavage: 1500, repassage: 1000, lavage_repassage: 2200 },
+    quotaWeight: 2,
+  };
+
+  it('exige les trois prix du catalogue', () => {
+    expect(catalogItemInputSchema.safeParse(catalogPayload).success).toBe(true);
+    expect(
+      catalogItemInputSchema.safeParse({
+        ...catalogPayload,
+        prices: { lavage: 1500, repassage: 1000 },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('applique les valeurs par defaut et refuse un patch vide', () => {
+    const parsed = catalogItemInputSchema.parse(catalogPayload);
+    expect(parsed.availableTreatments).toEqual(['lavage', 'repassage', 'lavage_repassage']);
+    expect(parsed.quotaWeight).toBe(2);
+    expect(catalogItemUpdateSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('ne réapplique aucun défaut lors d’un patch partiel', () => {
+    expect(
+      catalogItemUpdateSchema.parse({
+        prices: { lavage: 2000, repassage: 1200, lavage_repassage: 2800 },
+      }),
+    ).toEqual({ prices: { lavage: 2000, repassage: 1200, lavage_repassage: 2800 } });
+
+    expect(packUpdateSchema.parse({ priceXOF: 12_000 })).toEqual({ priceXOF: 12_000 });
+  });
+
+  it('refuse un poids de quota hors bornes', () => {
+    expect(catalogItemInputSchema.safeParse({ ...catalogPayload, quotaWeight: 11 }).success).toBe(
+      false,
+    );
+  });
+
+  it('applique les defauts d’un pack', () => {
+    const parsed = packInputSchema.parse({
+      code: 'normal',
+      name: 'Pack Normal',
+      priceXOF: 10_000,
+      quotaUnits: 10,
+    });
+
+    expect(parsed.billingPeriodDays).toBe(30);
+    expect(parsed.deliveryIncluded).toBe(false);
+    expect(parsed.includedTreatments).toHaveLength(3);
+    expect(parsed.rollover).toEqual({ enabled: false, maxPercent: 0 });
+  });
+
+  it('valide la souscription et l’ajustement signe', () => {
+    expect(subscriptionCreateSchema.parse({ packId: CATALOG_ITEM_ID }).paymentMethod).toBe(
+      'orange_money',
+    );
+    expect(
+      subscriptionAdjustQuotaSchema.safeParse({ units: -2, reason: 'Correction' }).success,
+    ).toBe(true);
+    expect(
+      subscriptionAdjustQuotaSchema.safeParse({ units: 0, reason: 'Correction' }).success,
+    ).toBe(false);
   });
 });
 

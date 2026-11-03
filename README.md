@@ -28,7 +28,16 @@ pnpm test
 pnpm build
 ```
 
-**Points d'entrée API** : `GET /health` (liveness), `GET /ready` (MongoDB), `GET /api/v1` (descripteur). Authentification : `/api/v1/auth/register`, `/login`, `/refresh`, `/logout`, `/otp/request`, `/otp/verify`, `/password/forgot`, `/password/reset`, `/password/change`, `/me`. Administration des comptes : `/api/v1/admin/users`.
+**Tests du moteur de quota** (replica set obligatoire, donc après `pnpm db:up`) :
+
+```bash
+MONGODB_URI='mongodb://127.0.0.1:27017/finiko_test?replicaSet=rs0&directConnection=true' \
+RUN_QUOTA_TESTS=true pnpm --filter @finiko/api test
+```
+
+Sous PowerShell : `$env:MONGODB_URI='...'; $env:RUN_QUOTA_TESTS='true'; pnpm --filter @finiko/api test`.
+
+**Points d'entrée API** : `GET /health` (liveness), `GET /ready` (MongoDB), `GET /api/v1` (descripteur). Authentification : `/api/v1/auth/register`, `/login`, `/refresh`, `/logout`, `/otp/request`, `/otp/verify`, `/password/forgot`, `/password/reset`, `/password/change`, `/me`. Administration des comptes : `/api/v1/admin/users`. Catalogue, packs et abonnements : `/api/v1/catalog/items`, `/api/v1/packs`, `/api/v1/subscriptions`, `/api/v1/subscriptions/me`.
 
 > En développement, `OTP_EXPOSE_CODE=true` renvoie le code SMS dans la réponse et l'écran de vérification l'affiche. En production, le code part uniquement par SMS et cette option est refusée au démarrage.
 
@@ -36,7 +45,7 @@ pnpm build
 >
 > Sans Docker, un MongoDB local en mode standalone permet de tester `/health`, `/ready` et l'authentification, mais **pas** les transactions du moteur de quota : il faut un replica set pour les lots 2 et suivants.
 
-**Contenu livré** : monorepo pnpm, contrats Zod partagés, API Express 5 + Mongoose avec santé, erreurs normalisées, logs Pino, rate limit et CORS ; **lot 1 authentification** (inscription client, login email/téléphone, Argon2id, JWT + refresh rotatif par famille, OTP SMS, mot de passe oublié, changement forcé, RBAC, audit, gestion admin des comptes) ; app Expo Router avec accueil, connexion, inscription, OTP, mot de passe oublié, changement de mot de passe et espace authentifié ; CI GitHub Actions ; Docker MongoDB replica set + Redis.
+**Contenu livré** : monorepo pnpm, contrats Zod partagés, API Express 5 + Mongoose avec santé, erreurs normalisées, logs Pino, rate limit et CORS ; **lot 1 authentification** (inscription client, login email/téléphone, Argon2id, JWT + refresh rotatif par famille, OTP SMS, mot de passe oublié, changement forcé, RBAC, audit, gestion admin des comptes) ; **lot 2 catalogue et abonnements** (CRUD catalogue à trois prix, CRUD packs, souscription avec snapshot immuable, moteur de quota transactionnel réservation → consommation → libération/remboursement, ledger append-only, ajustement admin, expiration et job de libération des réservations, écrans mobiles catalogue/packs/abonnement) ; app Expo Router avec accueil, connexion, inscription, OTP, mot de passe oublié, changement de mot de passe et espace authentifié ; CI GitHub Actions ; Docker MongoDB replica set + Redis.
 
 ---
 

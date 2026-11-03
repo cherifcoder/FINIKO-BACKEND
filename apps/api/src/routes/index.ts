@@ -2,6 +2,9 @@ import { Router } from 'express';
 import { env } from '../config/env';
 import { success } from '../utils/http';
 import { authRouter } from '../modules/auth/auth.routes';
+import { catalogRouter } from '../modules/catalog/catalog.routes';
+import { packsRouter } from '../modules/packs/pack.routes';
+import { subscriptionsRouter } from '../modules/subscriptions/subscription.routes';
 import { adminUsersRouter } from '../modules/users/user.routes';
 
 export const apiRouter = Router();
@@ -14,6 +17,9 @@ apiRouter.get('/', (_req, res) => {
       documentation: '/health',
       resources: {
         auth: '/api/v1/auth',
+        catalog: '/api/v1/catalog/items',
+        packs: '/api/v1/packs',
+        subscriptions: '/api/v1/subscriptions',
         adminUsers: '/api/v1/admin/users',
       },
     }),
@@ -21,4 +27,7 @@ apiRouter.get('/', (_req, res) => {
 });
 
 apiRouter.use('/auth', authRouter);
+apiRouter.use('/catalog', catalogRouter);
+apiRouter.use('/packs', packsRouter);
+apiRouter.use('/subscriptions', subscriptionsRouter);
 apiRouter.use('/admin/users', adminUsersRouter);

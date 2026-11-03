@@ -351,9 +351,9 @@ const catalogItemSchema = new Schema(
     imageUrl: { type: String, default: null },
     material: { type: String, trim: true, maxlength: 80, default: '' },
     prices: {
-      lavage: { type: Number, required: true, min: 0, validate: Number.isInteger },
-      repassage: { type: Number, required: true, min: 0, validate: Number.isInteger },
-      lavage_repassage: { type: Number, required: true, min: 0, validate: Number.isInteger },
+      lavage: { type: Number, required: true, min: 1, validate: Number.isInteger },
+      repassage: { type: Number, required: true, min: 1, validate: Number.isInteger },
+      lavage_repassage: { type: Number, required: true, min: 1, validate: Number.isInteger },
     },
     // Poids en "unités de linge" : un boubou peut valoir 2 unités de quota.
     quotaWeight: { type: Number, default: 1, min: 1, max: 10, validate: Number.isInteger },
@@ -398,7 +398,7 @@ const packSchema = new Schema(
     code: { type: String, required: true, unique: true, trim: true, lowercase: true },
     name: { type: String, required: true, trim: true, maxlength: 100 },
     description: { type: String, trim: true, maxlength: 500, default: '' },
-    priceXOF: { type: Number, required: true, min: 0, validate: Number.isInteger },
+    priceXOF: { type: Number, required: true, min: 1, validate: Number.isInteger },
     billingPeriodDays: { type: Number, default: 30, min: 1, max: 365 },
     quotaUnits: { type: Number, required: true, min: 1, validate: Number.isInteger },
     includedTreatments: {
@@ -408,7 +408,7 @@ const packSchema = new Schema(
     overagePolicy: { type: String, enum: ['prix_catalogue'], default: 'prix_catalogue' },
     deliveryIncluded: { type: Boolean, default: false },
     deliveryDiscountPercent: { type: Number, default: 0, min: 0, max: 100 },
-    maxItemsPerOrder: { type: Number, default: 50, min: 1 },
+    maxItemsPerOrder: { type: Number, default: 50, min: 1, max: 200 },
     rollover: {
       enabled: { type: Boolean, default: false },
       maxPercent: { type: Number, default: 0, min: 0, max: 100 },
@@ -423,12 +423,16 @@ const packSchema = new Schema(
     version: { type: Number, default: 1 },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
     updatedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+    deletedAt: { type: Date, default: null },
   },
   { timestamps: true },
 );
 
 packSchema.index({ isActive: 1, displayOrder: 1 });
+packSchema.index({ name: 'text', description: 'text' });
 ```
+
+La suppression d'un pack est **logique** (`deletedAt`) : un pack supprimé disparaît des listes publiques et ne peut plus être souscrit, mais les abonnements existants conservent leur `packSnapshot`.
 
 **Seed suggéré** (modifiable par l'admin) :
 
@@ -461,7 +465,7 @@ const packSnapshotSchema = new Schema(
 
 const subscriptionSchema = new Schema(
   {
-    client: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    client: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     pack: { type: Schema.Types.ObjectId, ref: 'Pack', required: true },
     packSnapshot: { type: packSnapshotSchema, required: true },
     status: {
@@ -476,8 +480,9 @@ const subscriptionSchema = new Schema(
     quotaUsed: { type: Number, default: 0, min: 0 },
     quotaReserved: { type: Number, default: 0, min: 0 },
     autoRenew: { type: Boolean, default: false },
-    renewalOf: { type: Schema.Types.ObjectId, ref: 'Subscription', default: null },
+    paymentMethod: { type: String, enum: ['orange_money', 'cash'], default: 'orange_money' },
     payment: { type: Schema.Types.ObjectId, ref: 'Payment', default: null },
+    renewalOf: { type: Schema.Types.ObjectId, ref: 'Subscription', default: null },
     activatedAt: { type: Date, default: null },
     cancelledAt: { type: Date, default: null },
     cancelReason: { type: String, trim: true, maxlength: 300, default: null },
@@ -491,7 +496,9 @@ subscriptionSchema.index(
   { client: 1 },
   { unique: true, partialFilterExpression: { status: 'active' } },
 );
+subscriptionSchema.index({ client: 1, status: 1 });
 subscriptionSchema.index({ status: 1, endDate: 1 });
+subscriptionSchema.index({ pack: 1, status: 1 });
 
 subscriptionSchema.virtual('quotaAvailable').get(function () {
   return Math.max(0, this.quotaTotal - this.quotaUsed - this.quotaReserved);
@@ -499,6 +506,8 @@ subscriptionSchema.virtual('quotaAvailable').get(function () {
 ```
 
 **Invariant** : `quotaUsed + quotaReserved <= quotaTotal`. Vérifié par la garde atomique du service, pas par Mongoose (les validateurs ne sont pas atomiques).
+
+**Sémantique d'ajustement** : un ajustement admin porte sur `quotaTotal` (et non sur `quotaUsed`). Un delta positif augmente le quota disponible ; un delta négatif le réduit. L'opération est refusée si le nouveau total deviendrait inférieur à `quotaUsed + quotaReserved`. Le mouvement est tracé dans le ledger avec `quotaTotalDelta` et `quotaTotalAfter`.
 
 ### 5.6 `subscription_usages` — ledger append-only
 
@@ -523,8 +532,10 @@ const subscriptionUsageSchema = new Schema(
     units: { type: Number, required: true, min: 1, validate: Number.isInteger },
     usedDelta: { type: Number, required: true, validate: Number.isInteger },
     reservedDelta: { type: Number, required: true, validate: Number.isInteger },
+    quotaTotalDelta: { type: Number, default: 0, validate: Number.isInteger },
     quotaUsedAfter: { type: Number, required: true, min: 0 },
     quotaReservedAfter: { type: Number, required: true, min: 0 },
+    quotaTotalAfter: { type: Number, required: true, min: 0 },
     reason: { type: String, trim: true, maxlength: 300, default: '' },
     actor: { type: Schema.Types.ObjectId, ref: 'User', default: null },
     requestId: { type: String, default: null },
@@ -533,6 +544,7 @@ const subscriptionUsageSchema = new Schema(
 );
 
 subscriptionUsageSchema.index({ subscription: 1, createdAt: -1 });
+subscriptionUsageSchema.index({ client: 1, createdAt: -1 });
 subscriptionUsageSchema.index(
   { order: 1, type: 1 },
   { unique: true, partialFilterExpression: { order: { $type: 'objectId' } } },
@@ -541,14 +553,16 @@ subscriptionUsageSchema.index(
 
 **Lecture du ledger** :
 
-| Type            | `usedDelta` | `reservedDelta` | Effet                                                     |
-| --------------- | ----------: | --------------: | --------------------------------------------------------- |
-| `reservation`   |           0 |              +N | Réserve N unités pour une commande en attente de paiement |
-| `consommation`  |          +N |              −N | Transforme la réservation en consommation                 |
-| `liberation`    |           0 |              −N | Annule une réservation (échec/expiration paiement)        |
-| `remboursement` |          −N |               0 | Rend N unités après annulation                            |
-| `ajustement`    |          ±N |              ±N | Correction admin tracée                                   |
-| `expiration`    |           0 |              −N | Libère les réservations orphelines d'un abonnement expiré |
+| Type            | `usedDelta` | `reservedDelta` | `quotaTotalDelta` | Effet                                                     |
+| --------------- | ----------: | --------------: | ----------------: | --------------------------------------------------------- |
+| `reservation`   |           0 |              +N |                 0 | Réserve N unités pour une commande en attente de paiement |
+| `consommation`  |          +N |              −N |                 0 | Transforme la réservation en consommation                 |
+| `liberation`    |           0 |              −N |                 0 | Annule une réservation (échec/expiration paiement)        |
+| `remboursement` |          −N |               0 |                 0 | Rend N unités après annulation                            |
+| `ajustement`    |           0 |               0 |                ±N | Modifie `quotaTotal` (delta signé)                        |
+| `expiration`    |           0 |              −N |                 0 | Libère les réservations orphelines d'un abonnement expiré |
+
+Chaque ligne est **append-only** et fige les soldes `quotaUsedAfter`, `quotaReservedAfter` et `quotaTotalAfter`. L'index unique partiel `{ order, type }` garantit qu'une commande ne peut produire qu'une réservation, une consommation, une libération et un remboursement. Le job de libération des réservations orphelines s'appuie sur `QUOTA_RESERVATION_TTL_MINUTES` (défaut 20 minutes) et reste idempotent.
 
 ### 5.7 `orders`
 

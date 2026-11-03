@@ -46,6 +46,9 @@ const envSchema = z
     ARGON2_MEMORY_KIB: z.coerce.number().int().min(8192).max(1_048_576).default(19_456),
     ARGON2_TIME_COST: z.coerce.number().int().min(1).max(10).default(2),
     ARGON2_PARALLELISM: z.coerce.number().int().min(1).max(8).default(1),
+
+    /** Durée de vie d'une réservation de quota avant libération par le job. */
+    QUOTA_RESERVATION_TTL_MINUTES: z.coerce.number().int().min(1).max(1440).default(20),
   })
   .superRefine((value, ctx) => {
     if (value.NODE_ENV !== 'production') return;

@@ -28,3 +28,17 @@ export function validateQuery<T>(schema: ZodType<T>): RequestHandler {
     next();
   };
 }
+
+export function validateParams<T>(schema: ZodType<T>): RequestHandler {
+  return (req: Request, _res: Response, next: NextFunction) => {
+    const result = schema.safeParse(req.params);
+
+    if (!result.success) {
+      next(result.error);
+      return;
+    }
+
+    req.validatedParams = result.data;
+    next();
+  };
+}

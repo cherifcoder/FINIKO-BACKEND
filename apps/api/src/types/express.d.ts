@@ -10,6 +10,7 @@ declare global {
         sessionId: string;
       };
       validatedQuery?: unknown;
+      validatedParams?: unknown;
     }
   }
 }

@@ -32,6 +32,9 @@ export const addressSchema = z.object({
 });
 export type AddressInput = z.infer<typeof addressSchema>;
 
+export const idParamSchema = z.object({ id: objectIdSchema });
+export type IdParam = z.infer<typeof idParamSchema>;
+
 export const paginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
