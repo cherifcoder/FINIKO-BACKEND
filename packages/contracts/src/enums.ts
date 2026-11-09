@@ -47,6 +47,19 @@ export type OrderStatus = (typeof ORDER_STATUSES)[number];
 export const ORDER_TERMINAL_STATUSES = ['terminee', 'annulee'] as const;
 export type OrderTerminalStatus = (typeof ORDER_TERMINAL_STATUSES)[number];
 
+export const ORDER_PAYMENT_STATUSES = [
+  'non_requis',
+  'en_attente',
+  'a_collecter',
+  'paye',
+  'rembourse',
+  'echoue',
+] as const;
+export type OrderPaymentStatus = (typeof ORDER_PAYMENT_STATUSES)[number];
+
+export const ORDER_PAYMENT_METHODS = ['pack', 'orange_money', 'cash', 'wallet'] as const;
+export type OrderPaymentMethod = (typeof ORDER_PAYMENT_METHODS)[number];
+
 /**
  * Transitions autorisees. Toute transition absente est refusee avec INVALID_TRANSITION.
  * Les annulations et litiges restent possibles sur les etats non terminaux.

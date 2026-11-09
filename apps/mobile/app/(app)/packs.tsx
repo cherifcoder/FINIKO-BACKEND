@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Pack } from '@finiko/contracts';
-import { Redirect, router } from 'expo-router';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import {
@@ -30,10 +30,12 @@ export default function PacksScreen() {
   const queryClient = useQueryClient();
   const [message, setMessage] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
 
+  const isClient = user?.role === 'client';
   const packsQuery = useQuery({ queryKey: ['packs'], queryFn: listPacksRequest });
   const subscriptionQuery = useQuery({
     queryKey: ['subscriptions', 'me'],
     queryFn: getMySubscriptionsRequest,
+    enabled: isClient,
   });
 
   const subscribe = useMutation({
@@ -60,9 +62,8 @@ export default function PacksScreen() {
   });
 
   if (!user) return null;
-  if (user.role !== 'client') return <Redirect href="/(app)/accueil" />;
 
-  const overview = subscriptionQuery.data;
+  const overview = isClient ? subscriptionQuery.data : undefined;
   const pending = overview?.pending ?? null;
   const scheduled = overview?.scheduled ?? null;
   const active = overview?.active ?? null;
@@ -210,22 +211,26 @@ export default function PacksScreen() {
             </View>
           ) : null}
 
-          {canSubscribe ? (
-            <PrimaryButton
-              label={active ? 'Programmer ce pack' : 'Souscrire'}
-              loading={subscribe.isPending && subscribe.variables === pack.id}
-              onPress={() => onSubscribe(pack)}
-            />
-          ) : pending ? (
-            <SecondaryButton
-              label="Paiement en attente"
-              onPress={() => router.push('/(app)/abonnement')}
-            />
+          {isClient ? (
+            canSubscribe ? (
+              <PrimaryButton
+                label={active ? 'Programmer ce pack' : 'Souscrire'}
+                loading={subscribe.isPending && subscribe.variables === pack.id}
+                onPress={() => onSubscribe(pack)}
+              />
+            ) : pending ? (
+              <SecondaryButton
+                label="Paiement en attente"
+                onPress={() => router.push('/(app)/abonnement')}
+              />
+            ) : (
+              <SecondaryButton
+                label="Renouvellement déjà programmé"
+                onPress={() => router.push('/(app)/abonnement')}
+              />
+            )
           ) : (
-            <SecondaryButton
-              label="Renouvellement déjà programmé"
-              onPress={() => router.push('/(app)/abonnement')}
-            />
+            <Pill label="Lecture seule" tone="neutral" />
           )}
         </Card>
       ))}

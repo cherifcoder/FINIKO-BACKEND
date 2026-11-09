@@ -1,17 +1,30 @@
 import { Router } from 'express';
 import {
   adminCreateUserSchema,
+  adminUpdateUserSchema,
   adminUpdateUserStatusSchema,
   adminUserListQuerySchema,
+  idParamSchema,
   type AdminCreateUserInput,
+  type AdminUpdateUserInput,
   type AdminUpdateUserStatusInput,
   type AdminUserListQuery,
+  type IdParam,
 } from '@finiko/contracts';
 import { authenticate, requireRole } from '../../middleware/authenticate';
-import { validateBody, validateQuery } from '../../middleware/validate';
+import { validateBody, validateParams, validateQuery } from '../../middleware/validate';
 import { writeAudit } from '../../utils/audit';
 import { success } from '../../utils/http';
-import { createManagedUser, listUsers, toPublicUser, updateUserStatus } from './user.service';
+import {
+  createManagedUser,
+  deleteManagedUser,
+  getManagedUserDetail,
+  listUsers,
+  toAdminUserDetail,
+  toPublicUser,
+  updateManagedUser,
+  updateUserStatus,
+} from './user.service';
 
 export const adminUsersRouter = Router();
 
@@ -96,3 +109,51 @@ adminUsersRouter.patch(
       );
   },
 );
+
+adminUsersRouter.get('/:id', validateParams(idParamSchema), async (req, res) => {
+  const { id } = req.validatedParams as IdParam;
+  const { user, driver, pressing } = await getManagedUserDetail(id);
+
+  res.status(200).json(success({ user: toAdminUserDetail(user, driver, pressing) }));
+});
+
+adminUsersRouter.patch(
+  '/:id',
+  validateParams(idParamSchema),
+  validateBody(adminUpdateUserSchema),
+  async (req, res) => {
+    const { id } = req.validatedParams as IdParam;
+    const input = req.body as AdminUpdateUserInput;
+    const { user, driver, pressing } = await updateManagedUser(id, input);
+
+    await writeAudit(req, {
+      action: 'user.update',
+      entityType: 'User',
+      entityId: user._id.toString(),
+      after: input,
+    });
+
+    res
+      .status(200)
+      .json(
+        success(
+          { user: toAdminUserDetail(user, driver, pressing) },
+          { message: 'Compte mis à jour.' },
+        ),
+      );
+  },
+);
+
+adminUsersRouter.delete('/:id', validateParams(idParamSchema), async (req, res) => {
+  const { id } = req.validatedParams as IdParam;
+  const user = await deleteManagedUser(id, req.auth!.userId);
+
+  await writeAudit(req, {
+    action: 'user.delete',
+    entityType: 'User',
+    entityId: user._id.toString(),
+    after: { deletedAt: user.deletedAt, status: user.status },
+  });
+
+  res.status(200).json(success({ user: toPublicUser(user) }, { message: 'Compte supprimé.' }));
+});

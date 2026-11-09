@@ -23,3 +23,16 @@ export function formatDate(iso: string): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? '—' : dateFormatter.format(date);
 }
+
+const dateTimeFormatter = new Intl.DateTimeFormat('fr-FR', {
+  day: 'numeric',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+/** Formate une date ISO avec l'heure, ex. "2 nov., 14:05". */
+export function formatDateTime(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? '—' : dateTimeFormatter.format(date);
+}

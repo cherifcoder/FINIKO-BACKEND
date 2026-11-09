@@ -4,12 +4,14 @@ import { StyleSheet, Text } from 'react-native';
 import { changePasswordSchema } from '@finiko/contracts';
 import { changePasswordRequest } from '../../src/api/auth';
 import { ApiClientError } from '../../src/api/client';
+import { roleHome } from '../../src/lib/role-home';
 import { useAuthStore } from '../../src/stores/auth.store';
 import { AuthLayout, Field, InlineMessage, PrimaryButton } from '../../src/ui/auth';
 import { colors, typography } from '../../src/theme/tokens';
 
 export default function ChangePasswordScreen() {
   const mustChangePassword = useAuthStore((state) => state.user?.mustChangePassword ?? false);
+  const user = useAuthStore((state) => state.user);
   const clear = useAuthStore((state) => state.clear);
 
   const [currentPassword, setCurrentPassword] = useState('');
@@ -59,7 +61,7 @@ export default function ChangePasswordScreen() {
       }
       footer={
         mustChangePassword ? undefined : (
-          <Link href="/(app)/accueil" style={styles.link}>
+          <Link href={user ? roleHome(user.role) : '/(app)/accueil'} style={styles.link}>
             Retour à mon espace
           </Link>
         )

@@ -63,7 +63,7 @@ export const packSchema = new Schema<Pack>(
     rollover: { type: rolloverSchema, default: () => ({ enabled: false, maxPercent: 0 }) },
     features: [{ type: String, trim: true, maxlength: 160 }],
     badge: { type: String, trim: true, maxlength: 30, default: null },
-    color: { type: String, trim: true, default: '#0A3D91' },
+    color: { type: String, trim: true, default: '#2563EB' },
     displayOrder: { type: Number, default: 0, min: 0 },
     isActive: { type: Boolean, default: true, index: true },
     validFrom: { type: Date, default: null },

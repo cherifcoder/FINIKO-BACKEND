@@ -9,6 +9,7 @@ import {
 } from '../../src/api/packs';
 import { ApiClientError } from '../../src/api/client';
 import { formatDate, formatXOF } from '../../src/lib/format';
+import { roleHome } from '../../src/lib/role-home';
 import { SUBSCRIPTION_STATUS_LABELS, USAGE_TYPE_LABELS } from '../../src/lib/labels';
 import { useAuthStore } from '../../src/stores/auth.store';
 import { DangerButton, InlineMessage, SecondaryButton } from '../../src/ui/auth';
@@ -74,7 +75,7 @@ export default function SubscriptionScreen() {
   });
 
   if (!user) return null;
-  if (user.role !== 'client') return <Redirect href="/(app)/accueil" />;
+  if (user.role !== 'client') return <Redirect href={roleHome(user.role)} />;
 
   const onCancel = (subscription: Subscription) => {
     const renewalOnly = subscription.status === 'active';

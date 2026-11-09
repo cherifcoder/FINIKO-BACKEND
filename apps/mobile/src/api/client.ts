@@ -1,11 +1,31 @@
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import type { ApiResponse, AuthSession } from '@finiko/contracts';
 import { useAuthStore } from '../stores/auth.store';
 
-const defaultApiUrl =
-  Platform.OS === 'android' ? 'http://10.0.2.2:3000/api/v1' : 'http://localhost:3000/api/v1';
+/**
+ * En développement, l'IP LAN du PC peut changer après une reconnexion Wi-Fi.
+ * On réutilise donc l'hôte du serveur Expo (hostUri) pour joindre l'API sur le
+ * même poste, sauf si EXPO_PUBLIC_API_URL est explicitement fourni.
+ */
+function resolveApiUrl(): string {
+  const configured = process.env.EXPO_PUBLIC_API_URL?.trim();
 
-export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? defaultApiUrl;
+  if (configured) return configured;
+
+  const hostUri = Constants.expoConfig?.hostUri;
+  const host = hostUri?.replace(/:\d+$/, '');
+
+  if (host) return `http://${host}:3000/api/v1`;
+
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    return `http://${window.location.hostname}:3000/api/v1`;
+  }
+
+  return Platform.OS === 'android' ? 'http://10.0.2.2:3000/api/v1' : 'http://localhost:3000/api/v1';
+}
+
+export const API_URL = resolveApiUrl();
 
 export class ApiClientError extends Error {
   constructor(

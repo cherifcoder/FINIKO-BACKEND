@@ -7,6 +7,7 @@ import { getMeRequest, logoutRequest } from '../../src/api/auth';
 import { ApiClientError } from '../../src/api/client';
 import { getMySubscriptionsRequest } from '../../src/api/packs';
 import { formatDate, formatXOF } from '../../src/lib/format';
+import { roleHome } from '../../src/lib/role-home';
 import { roleLabel, useAuthStore } from '../../src/stores/auth.store';
 import { DangerButton, InlineMessage, SecondaryButton } from '../../src/ui/auth';
 import { QuotaBar } from '../../src/ui/screen';
@@ -14,9 +15,9 @@ import { colors, radius, spacing, typography } from '../../src/theme/tokens';
 
 const NEXT_STEPS: Record<string, string> = {
   client: 'Choisissez un pack, parcourez le catalogue et suivez votre quota en temps réel.',
-  livreur: 'Les missions de ramassage et le guidage GPS arrivent au lot 5.',
-  pressing: 'La réception et le traitement article par article arrivent au lot 5.',
-  admin: "Le pilotage du catalogue, des comptes et du chiffre d'affaires arrive au lot 6.",
+  livreur: 'Retrouvez vos missions et votre historique sur le tableau de bord livreur.',
+  pressing: 'Retrouvez la file de traitement et l’historique sur le tableau de bord pressing.',
+  admin: 'Retrouvez vos indicateurs et vos menus de gestion sur le tableau de bord administrateur.',
 };
 
 export default function AccueilScreen() {
@@ -92,6 +93,21 @@ export default function AccueilScreen() {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={styles.container}>
+        <View style={styles.topBar}>
+          <Pressable
+            accessibilityLabel="Retour au tableau de bord"
+            accessibilityRole="button"
+            onPress={() =>
+              router.canGoBack() ? router.back() : router.replace(roleHome(user.role))
+            }
+            style={({ pressed }) => [styles.backButton, pressed && styles.shortcutPressed]}
+          >
+            <Text style={styles.backText}>←</Text>
+          </Pressable>
+          <Text style={styles.topBarTitle}>Mon compte</Text>
+          <View style={styles.topBarSpacer} />
+        </View>
+
         <View style={styles.identity}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{initials}</Text>
@@ -107,7 +123,7 @@ export default function AccueilScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Mon compte</Text>
+          <Text style={styles.cardTitle}>Informations personnelles</Text>
 
           <ProfileRow label="Téléphone" value={user.phone} />
           <ProfileRow
@@ -269,6 +285,35 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     gap: spacing.lg,
     padding: spacing.xl,
+  },
+  topBar: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  backButton: {
+    alignItems: 'center',
+    backgroundColor: colors.brand[50],
+    borderRadius: radius.pill,
+    height: 40,
+    justifyContent: 'center',
+    width: 40,
+  },
+  backText: {
+    color: colors.brand[700],
+    fontSize: 22,
+    fontWeight: '700',
+    lineHeight: 24,
+  },
+  topBarTitle: {
+    ...typography.title,
+    color: colors.text,
+    fontSize: 18,
+    lineHeight: 24,
+  },
+  topBarSpacer: {
+    height: 40,
+    width: 40,
   },
   identity: {
     alignItems: 'center',

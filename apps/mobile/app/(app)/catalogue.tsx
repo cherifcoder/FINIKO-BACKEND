@@ -1,29 +1,24 @@
 import { useQuery } from '@tanstack/react-query';
 import { CATEGORIES, type Category } from '@finiko/contracts';
-import { Redirect, router } from 'expo-router';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { listCatalogRequest } from '../../src/api/catalog';
 import { formatXOF } from '../../src/lib/format';
 import { CATEGORY_LABELS, TREATMENT_LABELS } from '../../src/lib/labels';
-import { useAuthStore } from '../../src/stores/auth.store';
-import { InlineMessage, SecondaryButton } from '../../src/ui/auth';
+import { InlineMessage, PrimaryButton, SecondaryButton } from '../../src/ui/auth';
 import { Card, EmptyState, LoadingBlock, Pill, Screen, uiStyles } from '../../src/ui/screen';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
 
 type CategoryFilter = Category | 'all';
 
 export default function CatalogueScreen() {
-  const user = useAuthStore((state) => state.user);
   const [category, setCategory] = useState<CategoryFilter>('all');
 
   const catalogQuery = useQuery({
     queryKey: ['catalog', category],
     queryFn: () => listCatalogRequest(category === 'all' ? undefined : category),
   });
-
-  if (!user) return null;
-  if (user.role !== 'client') return <Redirect href="/(app)/accueil" />;
 
   return (
     <Screen
@@ -35,6 +30,7 @@ export default function CatalogueScreen() {
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.filters}
+        style={styles.filtersScroll}
       >
         <FilterChip label="Tout" selected={category === 'all'} onPress={() => setCategory('all')} />
         {CATEGORIES.map((value) => (
@@ -46,6 +42,8 @@ export default function CatalogueScreen() {
           />
         ))}
       </ScrollView>
+
+      <PrimaryButton label="Composer ma commande" onPress={() => router.push('/(app)/commande')} />
 
       {catalogQuery.isLoading ? <LoadingBlock label="Chargement du catalogue…" /> : null}
 
@@ -91,12 +89,20 @@ export default function CatalogueScreen() {
               </View>
             ))}
           </View>
+
+          <SecondaryButton
+            label="Commander cet article"
+            onPress={() =>
+              router.push({ pathname: '/(app)/commande', params: { itemId: item.id } })
+            }
+          />
         </Card>
       ))}
 
       <View style={styles.note}>
         <Text style={styles.noteText}>
-          La sélection d’articles et la commande en ligne arrivent à la prochaine étape.
+          Ajoutez vos articles au panier, choisissez la prestation et suivez votre commande jusqu’à
+          la livraison.
         </Text>
       </View>
     </Screen>
@@ -129,15 +135,23 @@ function FilterChip({
 }
 
 const styles = StyleSheet.create({
+  filtersScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
   filters: {
+    alignItems: 'center',
     gap: spacing.sm,
     paddingVertical: spacing.xs,
   },
   chip: {
+    alignSelf: 'center',
     backgroundColor: colors.surface,
     borderColor: colors.border,
     borderRadius: radius.pill,
     borderWidth: 1,
+    flexGrow: 0,
+    flexShrink: 0,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
   },

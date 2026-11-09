@@ -291,6 +291,7 @@ export async function changePassword(
   }
 
   user.passwordHash = await hashPassword(input.newPassword);
+  user.mustChangePassword = false;
   await user.save();
   await revokeAllUserSessions(user._id.toString());
 

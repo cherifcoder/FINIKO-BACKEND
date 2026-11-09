@@ -286,12 +286,12 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   messageError: {
-    backgroundColor: '#FDECEA',
-    borderColor: '#F5C6C0',
+    backgroundColor: colors.dangerSurface,
+    borderColor: colors.dangerBorder,
   },
   messageSuccess: {
-    backgroundColor: '#E8F5EE',
-    borderColor: '#BDE3CC',
+    backgroundColor: colors.successSurface,
+    borderColor: colors.successBorder,
   },
   messageInfo: {
     backgroundColor: colors.brand[50],

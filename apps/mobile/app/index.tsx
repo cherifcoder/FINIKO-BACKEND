@@ -1,6 +1,7 @@
 import { Link, Redirect } from 'expo-router';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { roleHome } from '../src/lib/role-home';
 import { useAuthStore } from '../src/stores/auth.store';
 import { colors, radius, spacing, typography } from '../src/theme/tokens';
 
@@ -25,9 +26,10 @@ const roles = [
 
 export default function HomeScreen() {
   const status = useAuthStore((state) => state.status);
+  const user = useAuthStore((state) => state.user);
 
-  if (status === 'authenticated') {
-    return <Redirect href="/(app)/accueil" />;
+  if (status === 'authenticated' && user) {
+    return <Redirect href={roleHome(user.role)} />;
   }
 
   return (

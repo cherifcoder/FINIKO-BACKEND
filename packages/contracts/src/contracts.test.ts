@@ -103,6 +103,18 @@ describe('adminCreateUserSchema', () => {
     }
   });
 
+  it('accepte un client sans profil metier', () => {
+    const result = adminCreateUserSchema.safeParse({
+      role: 'client',
+      firstName: 'Awa',
+      lastName: 'Traore',
+      phone: '+22370000004',
+      password: 'Client@2026',
+    });
+
+    expect(result.success).toBe(true);
+  });
+
   it('applique les valeurs par defaut du profil livreur fourni', () => {
     const result = adminCreateUserSchema.safeParse({
       role: 'livreur',

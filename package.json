@@ -12,6 +12,7 @@
     "dev": "pnpm --parallel --filter @finiko/api --filter @finiko/mobile dev",
     "dev:api": "pnpm --filter @finiko/api dev",
     "dev:mobile": "pnpm --filter @finiko/mobile dev",
+    "seed": "pnpm --filter @finiko/api seed",
     "build": "pnpm --filter @finiko/api build",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -33,5 +34,10 @@
     "prettier": "^3.9.10",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.72.1"
+  },
+  "dependencies": {
+    "expo": "~58.0.22",
+    "react": "19.3.0",
+    "react-native": "0.88.1"
   }
 }

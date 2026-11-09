@@ -60,7 +60,7 @@ export const packInputSchema = packBaseSchema
     maxItemsPerOrder: packBaseSchema.shape.maxItemsPerOrder.default(50),
     rollover: packBaseSchema.shape.rollover.default({ enabled: false, maxPercent: 0 }),
     features: packBaseSchema.shape.features.default([]),
-    color: packBaseSchema.shape.color.default('#0A3D91'),
+    color: packBaseSchema.shape.color.default('#2563EB'),
     displayOrder: packBaseSchema.shape.displayOrder.default(0),
     isActive: packBaseSchema.shape.isActive.default(true),
   })

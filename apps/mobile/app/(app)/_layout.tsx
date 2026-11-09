@@ -21,8 +21,9 @@ export default function AppLayout() {
   }
 
   const onPasswordScreen = pathname.endsWith('/change-password');
+  const mustChangePassword = Boolean(user?.mustChangePassword) && user?.role !== 'admin';
 
-  if (user?.mustChangePassword && !onPasswordScreen) {
+  if (mustChangePassword && !onPasswordScreen) {
     return <Redirect href="/(app)/change-password" />;
   }
 

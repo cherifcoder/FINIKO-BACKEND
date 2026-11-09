@@ -12,7 +12,7 @@ export const passwordSchema = z
 
 export const userRoleSchema = z.enum(USER_ROLES);
 export const userStatusSchema = z.enum(USER_STATUSES);
-export const roleAdminCreatableSchema = z.enum(['livreur', 'pressing', 'admin']);
+export const roleAdminCreatableSchema = z.enum(['client', 'livreur', 'pressing', 'admin']);
 
 /**
  * Utilisateur expose par l'API. Aucun champ technique (passwordHash, __v) n'y figure.
@@ -180,15 +180,83 @@ export const adminCreateUserSchema = z
       });
     }
 
-    if (value.role === 'livreur' && value.pressing) {
+    if (value.role !== 'pressing' && value.pressing) {
       ctx.addIssue({
         code: 'custom',
-        message: 'Un livreur ne peut pas avoir de profil pressing',
+        message: 'Seul un pressing peut avoir un profil pressing',
         path: ['pressing'],
+      });
+    }
+
+    if (value.role !== 'livreur' && value.driver) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Seul un livreur peut avoir un profil livreur',
+        path: ['driver'],
       });
     }
   });
 export type AdminCreateUserInput = z.infer<typeof adminCreateUserSchema>;
+
+export const adminDriverProfileUpdateSchema = z.object({
+  vehicleType: z.enum(['moto', 'voiture', 'tricycle']).optional(),
+  plate: z.string().trim().max(20).nullable().optional(),
+  zoneCodes: z.array(z.string().trim().min(1).max(20)).max(50).optional(),
+});
+export type AdminDriverProfileUpdateInput = z.infer<typeof adminDriverProfileUpdateSchema>;
+
+export const adminPressingProfileUpdateSchema = z.object({
+  businessName: z.string().trim().min(2, 'Nom du pressing requis').max(120).optional(),
+  addressText: z.string().trim().min(5, 'Adresse requise').max(300).optional(),
+  location: z
+    .object({
+      lat: z.number().min(-90).max(90),
+      lng: z.number().min(-180).max(180),
+    })
+    .optional(),
+  capacity: z.number().int().min(1).max(500).optional(),
+});
+export type AdminPressingProfileUpdateInput = z.infer<typeof adminPressingProfileUpdateSchema>;
+
+export const adminUpdateUserSchema = z
+  .object({
+    firstName: z.string().trim().min(1).max(80).optional(),
+    lastName: z.string().trim().min(1).max(80).optional(),
+    phone: phoneSchema.optional(),
+    email: z.union([emailSchema, z.null()]).optional(),
+    password: passwordSchema.optional(),
+    mustChangePassword: z.boolean().optional(),
+    locale: z.enum(['fr', 'bm']).optional(),
+    driver: adminDriverProfileUpdateSchema.optional(),
+    pressing: adminPressingProfileUpdateSchema.optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: 'Aucun champ à mettre à jour',
+  });
+export type AdminUpdateUserInput = z.infer<typeof adminUpdateUserSchema>;
+
+export const adminDriverProfileSchema = z.object({
+  code: z.string(),
+  vehicleType: z.enum(['moto', 'voiture', 'tricycle']),
+  plate: z.string().nullable(),
+  zoneCodes: z.array(z.string()),
+});
+export type AdminDriverProfile = z.infer<typeof adminDriverProfileSchema>;
+
+export const adminPressingProfileSchema = z.object({
+  code: z.string(),
+  businessName: z.string(),
+  addressText: z.string(),
+  location: z.object({ lat: z.number(), lng: z.number() }),
+  capacity: z.number().int().min(1),
+});
+export type AdminPressingProfile = z.infer<typeof adminPressingProfileSchema>;
+
+export const adminUserDetailSchema = publicUserSchema.extend({
+  driver: adminDriverProfileSchema.nullable(),
+  pressing: adminPressingProfileSchema.nullable(),
+});
+export type AdminUserDetail = z.infer<typeof adminUserDetailSchema>;
 
 export const adminUpdateUserStatusSchema = z.object({
   status: z.enum(['actif', 'suspendu']),

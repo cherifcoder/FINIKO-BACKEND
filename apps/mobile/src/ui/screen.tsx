@@ -233,13 +233,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.brand[50],
   },
   pillSuccess: {
-    backgroundColor: '#E8F5EE',
+    backgroundColor: colors.successSurface,
   },
   pillWarning: {
-    backgroundColor: '#FFF4E0',
+    backgroundColor: colors.warningSurface,
   },
   pillDanger: {
-    backgroundColor: '#FDECEA',
+    backgroundColor: colors.dangerSurface,
   },
   pillText: {
     ...typography.caption,

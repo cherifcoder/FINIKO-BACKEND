@@ -6,6 +6,8 @@
     "orientation": "portrait",
     "scheme": "finiko",
     "userInterfaceStyle": "light",
+    "backgroundColor": "#F9FAFB",
+    "primaryColor": "#2563EB",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
@@ -20,7 +22,16 @@
       "bundler": "metro",
       "output": "single"
     },
-    "plugins": ["expo-router", "expo-secure-store"],
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "FINIKO utilise votre position pour choisir l’adresse de ramassage et de livraison sur la carte."
+        }
+      ]
+    ],
     "experiments": {
       "typedRoutes": false
     }

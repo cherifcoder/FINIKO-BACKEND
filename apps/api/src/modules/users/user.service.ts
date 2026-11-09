@@ -1,8 +1,12 @@
 import { randomBytes } from 'node:crypto';
-import type { Types } from 'mongoose';
+import type { HydratedDocument, Types } from 'mongoose';
 import type {
   AdminCreateUserInput,
+  AdminDriverProfile,
+  AdminPressingProfile,
+  AdminUpdateUserInput,
   AdminUpdateUserStatusInput,
+  AdminUserDetail,
   PublicUser,
   UserRole,
   UserStatus,
@@ -14,6 +18,8 @@ import {
   ClientProfileModel,
   DriverProfileModel,
   PressingProfileModel,
+  type DriverProfile,
+  type PressingProfile,
 } from '../../models/profile.model';
 import { SessionModel } from '../../models/session.model';
 import { UserModel, type UserDocument } from '../../models/user.model';
@@ -50,6 +56,39 @@ export function toPublicUser(user: UserLike): PublicUser {
     avatarUrl: user.avatarUrl,
     locale: user.locale,
     createdAt: user.createdAt.toISOString(),
+  };
+}
+
+function toAdminDriverProfile(profile: DriverProfile): AdminDriverProfile {
+  return {
+    code: profile.code,
+    vehicleType: profile.vehicle.type,
+    plate: profile.vehicle.plate ?? null,
+    zoneCodes: [...profile.zoneCodes],
+  };
+}
+
+function toAdminPressingProfile(profile: PressingProfile): AdminPressingProfile {
+  const [lng, lat] = profile.location.coordinates;
+
+  return {
+    code: profile.code,
+    businessName: profile.businessName,
+    addressText: profile.addressText,
+    location: { lat: lat ?? 0, lng: lng ?? 0 },
+    capacity: profile.capacityPerDay,
+  };
+}
+
+export function toAdminUserDetail(
+  user: UserLike,
+  driver: DriverProfile | null,
+  pressing: PressingProfile | null,
+): AdminUserDetail {
+  return {
+    ...toPublicUser(user),
+    driver: driver ? toAdminDriverProfile(driver) : null,
+    pressing: pressing ? toAdminPressingProfile(pressing) : null,
   };
 }
 
@@ -114,6 +153,8 @@ export async function createManagedUser(
         },
         zoneCodes: input.driver?.zoneCodes ?? [],
       });
+    } else if (input.role === 'client') {
+      profile = await createClientProfile(user._id);
     } else if (input.role === 'pressing') {
       const pressing = input.pressing;
 
@@ -161,16 +202,24 @@ export async function createClientProfile(
   throw new Error('Impossible de générer un code de parrainage');
 }
 
-export async function assertContactAvailable(phone: string, email?: string): Promise<void> {
+export async function assertContactAvailable(
+  phone: string,
+  email?: string,
+  excludeUserId?: string,
+): Promise<void> {
   const filters: Array<Record<string, string>> = [{ phone }];
 
   if (email) {
     filters.push({ email });
   }
 
-  const existing = await UserModel.findOne({ $or: filters, deletedAt: null })
-    .select('phone email')
-    .lean();
+  const query: Record<string, unknown> = { $or: filters, deletedAt: null };
+
+  if (excludeUserId) {
+    query._id = { $ne: excludeUserId };
+  }
+
+  const existing = await UserModel.findOne(query).select('phone email').lean();
 
   if (!existing) return;
 
@@ -259,6 +308,198 @@ export async function updateUserStatus(
   }
 
   return { user, previousStatus };
+}
+
+export async function getManagedUserDetail(targetId: string): Promise<{
+  user: UserDocument;
+  driver: DriverProfile | null;
+  pressing: PressingProfile | null;
+}> {
+  const user = await UserModel.findOne({ _id: targetId, deletedAt: null });
+
+  if (!user) {
+    throw ApiError.notFound('Utilisateur introuvable.');
+  }
+
+  const [driver, pressing] = await Promise.all([
+    user.role === 'livreur' ? DriverProfileModel.findOne({ user: user._id }) : null,
+    user.role === 'pressing' ? PressingProfileModel.findOne({ user: user._id }) : null,
+  ]);
+
+  return { user, driver, pressing };
+}
+
+export async function updateManagedUser(
+  targetId: string,
+  input: AdminUpdateUserInput,
+): Promise<{
+  user: UserDocument;
+  driver: DriverProfile | null;
+  pressing: PressingProfile | null;
+}> {
+  const user = await UserModel.findOne({ _id: targetId, deletedAt: null });
+
+  if (!user) {
+    throw ApiError.notFound('Utilisateur introuvable.');
+  }
+
+  if (input.driver && user.role !== 'livreur') {
+    throw ApiError.badRequest('Un profil livreur ne peut être associé qu’à un livreur.');
+  }
+
+  if (input.pressing && user.role !== 'pressing') {
+    throw ApiError.badRequest('Un profil pressing ne peut être associé qu’à un pressing.');
+  }
+
+  const nextPhone = input.phone ?? user.phone;
+  const nextEmail =
+    input.email === undefined ? user.email : input.email === null ? undefined : input.email;
+
+  if (input.phone !== undefined || input.email !== undefined) {
+    await assertContactAvailable(nextPhone, nextEmail, targetId);
+  }
+
+  if (input.firstName !== undefined) user.firstName = input.firstName;
+  if (input.lastName !== undefined) user.lastName = input.lastName;
+  if (input.phone !== undefined) {
+    if (input.phone !== user.phone) {
+      user.phoneVerifiedAt = null;
+    }
+    user.phone = input.phone;
+  }
+  if (input.email !== undefined) {
+    user.email = input.email === null ? undefined : input.email;
+  }
+  if (input.locale !== undefined) user.locale = input.locale;
+
+  let revokeSessions = false;
+
+  if (input.password) {
+    user.passwordHash = await hashPassword(input.password);
+    user.mustChangePassword = input.mustChangePassword ?? true;
+    revokeSessions = true;
+  } else if (input.mustChangePassword !== undefined) {
+    user.mustChangePassword = input.mustChangePassword;
+  }
+
+  await user.save();
+
+  if (revokeSessions) {
+    await revokeAllUserSessions(targetId);
+  }
+
+  let driver: HydratedDocument<DriverProfile> | null = null;
+  let pressing: HydratedDocument<PressingProfile> | null = null;
+
+  if (user.role === 'livreur') {
+    driver = await DriverProfileModel.findOne({ user: user._id });
+
+    if (!driver) {
+      const code = await nextEntityCode('driver');
+      driver = await DriverProfileModel.create({
+        user: user._id,
+        code,
+        vehicle: {
+          type: input.driver?.vehicleType ?? 'moto',
+          plate: input.driver?.plate ?? null,
+        },
+        zoneCodes: input.driver?.zoneCodes ?? [],
+      });
+    } else if (input.driver) {
+      if (input.driver.vehicleType !== undefined) {
+        driver.vehicle.type = input.driver.vehicleType;
+      }
+      if (input.driver.plate !== undefined) {
+        driver.vehicle.plate = input.driver.plate;
+      }
+      if (input.driver.zoneCodes !== undefined) {
+        driver.zoneCodes = input.driver.zoneCodes;
+      }
+      await driver.save();
+    }
+  }
+
+  if (user.role === 'pressing') {
+    pressing = await PressingProfileModel.findOne({ user: user._id });
+
+    if (!pressing) {
+      if (
+        !input.pressing?.businessName ||
+        !input.pressing.addressText ||
+        !input.pressing.location
+      ) {
+        throw ApiError.badRequest('Informations du pressing requises.');
+      }
+
+      const code = await nextEntityCode('pressing');
+      pressing = await PressingProfileModel.create({
+        user: user._id,
+        code,
+        businessName: input.pressing.businessName,
+        addressText: input.pressing.addressText,
+        location: {
+          type: 'Point',
+          coordinates: [input.pressing.location.lng, input.pressing.location.lat],
+        },
+        ...(input.pressing.capacity ? { capacityPerDay: input.pressing.capacity } : {}),
+      });
+    } else if (input.pressing) {
+      if (input.pressing.businessName !== undefined) {
+        pressing.businessName = input.pressing.businessName;
+      }
+      if (input.pressing.addressText !== undefined) {
+        pressing.addressText = input.pressing.addressText;
+      }
+      if (input.pressing.location) {
+        pressing.location = {
+          type: 'Point',
+          coordinates: [input.pressing.location.lng, input.pressing.location.lat],
+        };
+      }
+      if (input.pressing.capacity !== undefined) {
+        pressing.capacityPerDay = input.pressing.capacity;
+      }
+      await pressing.save();
+    }
+  }
+
+  return { user, driver, pressing };
+}
+
+export async function deleteManagedUser(targetId: string, actorId: string): Promise<UserDocument> {
+  if (targetId === actorId) {
+    throw ApiError.conflict('SELF_DELETE', 'Vous ne pouvez pas supprimer votre propre compte.');
+  }
+
+  const user = await UserModel.findOne({ _id: targetId, deletedAt: null });
+
+  if (!user) {
+    throw ApiError.notFound('Utilisateur introuvable.');
+  }
+
+  if (user.role === 'admin' && user.status === 'actif') {
+    const otherActiveAdmins = await UserModel.countDocuments({
+      _id: { $ne: user._id },
+      role: 'admin',
+      status: 'actif',
+      deletedAt: null,
+    });
+
+    if (otherActiveAdmins === 0) {
+      throw ApiError.conflict(
+        'LAST_ADMIN',
+        'Impossible de supprimer le dernier administrateur actif.',
+      );
+    }
+  }
+
+  user.deletedAt = new Date();
+  user.status = 'supprime';
+  user.pushTokens = [];
+  await user.save();
+  await revokeAllUserSessions(targetId);
+
+  return user;
 }
 
 function isDuplicateKeyError(error: unknown): boolean {
