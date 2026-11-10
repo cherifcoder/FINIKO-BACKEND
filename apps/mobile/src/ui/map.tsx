@@ -1,15 +1,29 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useRef } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
+import Constants from 'expo-constants';
 import type { Coordinates } from '../lib/maps';
 import { colors, radius, spacing, typography } from '../theme/tokens';
 
-/* react-native-maps est un module natif : chargement conditionnel obligatoire. */
+/**
+ * react-native-maps est un module natif : chargement conditionnel obligatoire.
+ * Sur Android, le SDK Google Maps exige une clé API (android.config.googleMaps.apiKey
+ * dans app.json). Sans clé, l'instanciation de MapView fait crasher l'app en natif
+ * (IllegalStateException "API key not found") : on affiche donc un fallback tant
+ * qu'aucune clé n'est configurée.
+ */
+const googleMapsApiKey: string | undefined =
+  Platform.OS === 'android'
+    ? (Constants.expoConfig as any)?.android?.config?.googleMaps?.apiKey
+    : undefined;
+
+const mapsAvailable = Platform.OS !== 'web' && (Platform.OS === 'ios' || Boolean(googleMapsApiKey));
+
 let MapView: any = null;
 let Marker: any = null;
 let Polyline: any = null;
 
-if (Platform.OS !== 'web') {
+if (mapsAvailable) {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const maps = require('react-native-maps');
   MapView = maps.default;
