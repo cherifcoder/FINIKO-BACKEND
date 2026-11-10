@@ -9,6 +9,12 @@
     "backgroundColor": "#F9FAFB",
     "primaryColor": "#2563EB",
     "newArchEnabled": true,
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/0449895e-4b53-4496-8d2a-bae56f868727"
+    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "ml.finiko.app"
@@ -34,6 +40,12 @@
     ],
     "experiments": {
       "typedRoutes": false
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "0449895e-4b53-4496-8d2a-bae56f868727"
+      }
+    },
+    "owner": "cherifcoder"
   }
 }
