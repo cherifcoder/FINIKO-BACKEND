@@ -4,14 +4,32 @@ import type { ApiResponse, AuthSession } from '@finiko/contracts';
 import { useAuthStore } from '../stores/auth.store';
 
 /**
- * En développement, l'IP LAN du PC peut changer après une reconnexion Wi-Fi.
- * On réutilise donc l'hôte du serveur Expo (hostUri) pour joindre l'API sur le
- * même poste, sauf si EXPO_PUBLIC_API_URL est explicitement fourni.
+ * URL publique de l'API en production (déployée sur Vercel).
+ * À mettre à jour si le nom du projet Vercel change, ou à surcharger via
+ * `EXPO_PUBLIC_API_URL` lors du build (EAS / .env).
+ */
+const PRODUCTION_API_URL = 'https://finiko-backend.vercel.app/api/v1';
+
+/** Timeout par requête (ms). Tolère le cold start des fonctions Vercel. */
+const REQUEST_TIMEOUT_MS = 20_000;
+
+/** Délai avant la seconde tentative (cold start Vercel). */
+const COLD_START_RETRY_DELAY_MS = 500;
+
+/**
+ * Résolution de l'URL de base de l'API :
+ * 1. `EXPO_PUBLIC_API_URL` s'il est défini (priorité absolue) ;
+ * 2. en production (`__DEV__ === false`) : l'URL publique Vercel,
+ *    JAMAIS localhost / 127.0.0.1 / IP LAN ;
+ * 3. en développement local : l'hôte du serveur Expo (IP LAN du PC),
+ *    sinon `10.0.2.2` (émulateur Android) ou `localhost` (iOS/web).
  */
 function resolveApiUrl(): string {
   const configured = process.env.EXPO_PUBLIC_API_URL?.trim();
 
   if (configured) return configured;
+
+  if (!__DEV__) return PRODUCTION_API_URL;
 
   const hostUri = Constants.expoConfig?.hostUri;
   const host = hostUri?.replace(/:\d+$/, '');
@@ -46,6 +64,61 @@ interface ApiFetchOptions extends RequestInit {
   skipRefresh?: boolean;
 }
 
+const isAbortError = (error: unknown): boolean =>
+  error instanceof Error && error.name === 'AbortError';
+
+/** `fetch` avec timeout : évite les requêtes bloquées à l'infini. */
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function requestOnce(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetchWithTimeout(url, init);
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw new ApiClientError(
+        0,
+        'NETWORK_TIMEOUT',
+        'Le serveur met trop de temps à répondre (cold start possible). Réessayez.',
+      );
+    }
+    throw new ApiClientError(0, 'NETWORK_ERROR', 'Serveur injoignable. Vérifiez votre connexion.');
+  }
+}
+
+/**
+ * Une fonction serverless Vercel peut être "froide" (mise en veille) :
+ * la toute première requête peut échouer ou expirer. On retente donc
+ * une fois les requêtes idempotentes (GET/HEAD/OPTIONS) après un court
+ * délai, le temps que l'instance démarre.
+ */
+async function requestWithColdStartRetry(url: string, init: RequestInit): Promise<Response> {
+  const method = (init.method ?? 'GET').toUpperCase();
+  const idempotent = method === 'GET' || method === 'HEAD' || method === 'OPTIONS';
+
+  try {
+    return await requestOnce(url, init);
+  } catch (error) {
+    if (!idempotent || !(error instanceof ApiClientError) || error.status !== 0) {
+      throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, COLD_START_RETRY_DELAY_MS));
+    return requestOnce(url, init);
+  }
+}
+
 let refreshInFlight: Promise<boolean> | null = null;
 
 async function refreshSession(): Promise<boolean> {
@@ -57,11 +130,12 @@ async function refreshSession(): Promise<boolean> {
 
   refreshInFlight = (async () => {
     try {
-      const response = await fetch(`${API_URL}/auth/refresh`, {
+      const response = await requestWithColdStartRetry(`${API_URL}/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),
-      });
+        skipRefresh: true,
+      } as RequestInit);
 
       const payload = (await response.json()) as ApiResponse<AuthSession>;
 
@@ -122,21 +196,13 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
 
   let response: Response;
 
-  try {
-    response = await fetch(`${API_URL}${path}`, buildRequest());
-  } catch {
-    throw new ApiClientError(0, 'NETWORK_ERROR', 'Serveur injoignable. Vérifiez votre connexion.');
-  }
+  response = await requestWithColdStartRetry(`${API_URL}${path}`, buildRequest());
 
   if (response.status === 401 && auth && !skipRefresh) {
     const refreshed = await refreshSession();
 
     if (refreshed) {
-      try {
-        response = await fetch(`${API_URL}${path}`, buildRequest());
-      } catch {
-        throw new ApiClientError(0, 'NETWORK_ERROR', 'Serveur injoignable.');
-      }
+      response = await requestWithColdStartRetry(`${API_URL}${path}`, buildRequest());
     }
   }
 
