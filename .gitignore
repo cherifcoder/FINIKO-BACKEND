@@ -8,6 +8,9 @@ build/
 coverage/
 *.tsbuildinfo
 
+# Serverless bundle (généré par tsup.serverless.config.ts pour Vercel)
+/api/
+
 # Environment files
 .env
 .env.*
@@ -47,3 +50,6 @@ maestro/.artifacts/
 # Misc
 .turbo/
 .cache/
+
+.vercel
+.env*

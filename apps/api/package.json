@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsup",
+    "build:serverless": "tsup --config tsup.serverless.config.ts",
     "start": "node dist/server.js",
     "seed": "tsx src/scripts/seed.ts",
     "typecheck": "tsc --noEmit",

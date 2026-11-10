@@ -1,18 +1,20 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
+  "outputDirectory": "public",
+  "buildCommand": "pnpm --filter @finiko/api build:serverless && node scripts/copy-argon2-vercel.mjs",
   "regions": ["fra1"],
   "functions": {
-    "apps/api/api/index.ts": {
+    "api/index.js": {
       "maxDuration": 60,
       "memory": 1024,
-      "includeFiles": "**/*.node"
+      "includeFiles": "node_modules/@node-rs/**"
     }
   },
   "rewrites": [
     {
       "source": "/(.*)",
-      "destination": "/apps/api/api/index"
+      "destination": "/api/index"
     }
   ]
 }

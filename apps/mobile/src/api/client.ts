@@ -8,7 +8,7 @@ import { useAuthStore } from '../stores/auth.store';
  * À mettre à jour si le nom du projet Vercel change, ou à surcharger via
  * `EXPO_PUBLIC_API_URL` lors du build (EAS / .env).
  */
-const PRODUCTION_API_URL = 'https://finiko-backend.vercel.app/api/v1';
+const PRODUCTION_API_URL = 'https://finiko-backend-two.vercel.app/api/v1';
 
 /** Timeout par requête (ms). Tolère le cold start des fonctions Vercel. */
 const REQUEST_TIMEOUT_MS = 20_000;

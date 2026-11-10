@@ -1,0 +1,25 @@
+# Le CLI Vercel n'applique PAS .gitignore lors des déploiements directs
+# (`vercel deploy`) : ce fichier est le SEUL filtre d'upload. Il est vital
+# d'y exclure tout secret local (.env) qui sinon serait embarqué dans la
+# lambda et chargé par dotenv.
+
+# Secrets locaux — JAMAIS uploader
+.env
+.env.*
+!.env.example
+apps/api/.env
+apps/api/.env.*
+
+# Artefacts de build locaux (régénérés par le buildCommand sur Vercel)
+api
+dist
+coverage
+*.tsbuildinfo
+
+# Seule l'API est déployée : le reste du monorepo n'a pas à être uploadé
+apps/mobile
+android
+docs
+.github
+.vscode
+.git

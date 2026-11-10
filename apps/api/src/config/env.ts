@@ -1,5 +1,13 @@
-import 'dotenv/config';
+import { config as loadDotenv } from 'dotenv';
 import { z } from 'zod';
+
+// Charge le .env local UNIQUEMENT hors production : en production (Vercel),
+// les variables viennent de la plateforme et un éventuel fichier .env
+// uploadé par erreur ne doit jamais être lu (défense en profondeur,
+// complémentaire au .vercelignore qui l'exclut de l'upload).
+if (process.env.NODE_ENV !== 'production') {
+  loadDotenv();
+}
 
 const DEV_JWT_SECRET = 'dev-only-finiko-access-secret-change-me-32';
 const DEV_OTP_PEPPER = 'dev-only-otp-pepper-change-me';
