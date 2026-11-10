@@ -10,8 +10,11 @@
 apps/api/.env
 apps/api/.env.*
 
-# Artefacts de build locaux (régénérés par le buildCommand sur Vercel)
-api
+# Artefacts de build locaux (régénérés par le buildCommand sur Vercel).
+# ATTENTION : api/index.js (le bundle prébuild) DOIT être uploadé, Vercel ne
+# découvre les fonctions serverless que dans les fichiers uploadés.
+api/*.map
+api/node_modules
 dist
 coverage
 *.tsbuildinfo
