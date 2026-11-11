@@ -81,15 +81,22 @@ async function loginAs(identifier: string, password: string) {
 }
 
 describe('inscription et vérification OTP', () => {
-  it('crée un client et expose un code en développement', async () => {
+  it('crée un client et ouvre directement une session', async () => {
     const response = await registerClient();
 
     expect(response.status).toBe(201);
     expect(response.body.success).toBe(true);
     expect(response.body.data.user.role).toBe('client');
     expect(response.body.data.user.email).toBe('awa@example.com');
-    expect(response.body.data.otpRequired).toBe(true);
-    expect(response.body.data.devCode).toMatch(/^\d{6}$/);
+    expect(response.body.data.accessToken).toBeTruthy();
+    expect(response.body.data.refreshToken).toMatch(/^rt_/);
+
+    const me = await request(app)
+      .get('/api/v1/auth/me')
+      .set('Authorization', `Bearer ${response.body.data.accessToken}`);
+
+    expect(me.status).toBe(200);
+    expect(me.body.data.user.phone).toBe(CLIENT.phone);
 
     const profile = await ClientProfileModel.findOne({ user: response.body.data.user.id }).lean();
     expect(profile?.referralCode).toBeTruthy();
@@ -104,12 +111,24 @@ describe('inscription et vérification OTP', () => {
   });
 
   it('vérifie le téléphone et ouvre une session', async () => {
-    const registered = await registerClient();
-    const code = registered.body.data.devCode as string;
+    await registerClient();
 
-    const verified = await request(app)
-      .post('/api/v1/auth/otp/verify')
-      .send({ identifier: CLIENT.phone, purpose: 'phone_verify', code });
+    // L'inscription a déjà émis un code (cooldown actif) : on repart d'un
+    // code neuf pour couvrir la vérification de bout en bout.
+    await OtpCodeModel.deleteMany({});
+
+    const challenge = await request(app)
+      .post('/api/v1/auth/otp/request')
+      .send({ identifier: CLIENT.phone, purpose: 'phone_verify' });
+
+    expect(challenge.status).toBe(200);
+    expect(challenge.body.data.devCode).toMatch(/^\d{6}$/);
+
+    const verified = await request(app).post('/api/v1/auth/otp/verify').send({
+      identifier: CLIENT.phone,
+      purpose: 'phone_verify',
+      code: challenge.body.data.devCode,
+    });
 
     expect(verified.status).toBe(200);
     expect(verified.body.data.accessToken).toBeTruthy();
@@ -154,13 +173,8 @@ describe('inscription et vérification OTP', () => {
 describe('connexion et rafraîchissement', () => {
   async function verifiedClient() {
     const registered = await registerClient();
-    const verified = await request(app).post('/api/v1/auth/otp/verify').send({
-      identifier: CLIENT.phone,
-      purpose: 'phone_verify',
-      code: registered.body.data.devCode,
-    });
 
-    return verified.body.data as {
+    return registered.body.data as {
       accessToken: string;
       refreshToken: string;
       user: { id: string };
@@ -238,15 +252,11 @@ describe('connexion et rafraîchissement', () => {
 describe('profil et mot de passe', () => {
   it('met à jour le profil et supprime l email', async () => {
     const registered = await registerClient();
-    const verified = await request(app).post('/api/v1/auth/otp/verify').send({
-      identifier: CLIENT.phone,
-      purpose: 'phone_verify',
-      code: registered.body.data.devCode,
-    });
+    const session = registered.body.data;
 
     const update = await request(app)
       .patch('/api/v1/auth/me')
-      .set('Authorization', `Bearer ${verified.body.data.accessToken}`)
+      .set('Authorization', `Bearer ${session.accessToken}`)
       .send({ firstName: 'Aminata', email: null });
 
     expect(update.status).toBe(200);
@@ -341,15 +351,11 @@ describe('administration des comptes', () => {
 
   it('refuse l accès admin à un client', async () => {
     const registered = await registerClient();
-    const verified = await request(app).post('/api/v1/auth/otp/verify').send({
-      identifier: CLIENT.phone,
-      purpose: 'phone_verify',
-      code: registered.body.data.devCode,
-    });
+    const session = registered.body.data;
 
     const response = await request(app)
       .get('/api/v1/admin/users')
-      .set('Authorization', `Bearer ${verified.body.data.accessToken}`);
+      .set('Authorization', `Bearer ${session.accessToken}`);
 
     expect(response.status).toBe(403);
     expect(response.body.error.code).toBe('FORBIDDEN');

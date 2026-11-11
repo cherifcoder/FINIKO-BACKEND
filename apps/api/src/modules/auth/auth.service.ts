@@ -89,6 +89,12 @@ async function toAuthSession(user: UserDocument, bundle: SessionBundle): Promise
   };
 }
 
+/**
+ * Inscription d'un client : le compte est créé, la session est ouverte
+ * immédiatement et le code de vérification SMS est envoyé au mieux (best
+ * effort). Sans fournisseur SMS branché (alpha), l'envoi est simplement
+ * journalisé et l'utilisateur accède quand même à son espace client.
+ */
 export async function register(
   input: RegisterInput,
   context: SessionContext,
@@ -112,16 +118,20 @@ export async function register(
   try {
     await createClientProfile(user._id);
 
-    const otp = await issueOtp(input.phone, 'phone_verify');
+    // Best effort : un échec d'envoi (aucun fournisseur SMS en alpha) ne doit
+    // jamais empêcher l'inscription de aboutir.
+    await issueOtp(input.phone, 'phone_verify').catch((error) => {
+      logger.warn(
+        { err: error, phone: input.phone },
+        "Code de vérification non envoyé, l'inscription se poursuit",
+      );
+    });
+
+    const bundle = await createSession(user, context);
 
     logger.info({ userId: user._id.toString(), ip: context.ip }, 'Nouveau compte client');
 
-    return {
-      user: toPublicUser(user),
-      otpRequired: true,
-      otpExpiresIn: otp.expiresIn,
-      ...(otp.devCode ? { devCode: otp.devCode } : {}),
-    };
+    return toAuthSession(user, bundle);
   } catch (error) {
     logger.error({ err: error }, "Échec de finalisation de l'inscription, nettoyage");
     await Promise.all([

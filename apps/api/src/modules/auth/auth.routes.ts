@@ -128,7 +128,7 @@ function contextFrom(req: Request): SessionContext {
 
 authRouter.post('/register', registerLimiter, validateBody(registerSchema), async (req, res) => {
   const result = await register(req.body as RegisterInput, contextFrom(req));
-  res.status(201).json(success(result, { message: 'Compte créé. Vérifiez votre téléphone.' }));
+  res.status(201).json(success(result, { message: 'Compte créé. Bienvenue sur FINIKO !' }));
 });
 
 authRouter.post('/login', loginLimiter, validateBody(loginSchema), async (req, res) => {

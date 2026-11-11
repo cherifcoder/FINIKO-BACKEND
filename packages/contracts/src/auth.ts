@@ -86,13 +86,12 @@ export const authSessionSchema = authTokensSchema.extend({
 });
 export type AuthSession = z.infer<typeof authSessionSchema>;
 
-export const registerResponseSchema = z.object({
-  user: publicUserSchema,
-  otpRequired: z.literal(true),
-  otpExpiresIn: z.number().int().positive(),
-  devCode: z.string().optional(),
-});
-export type RegisterResponse = z.infer<typeof registerResponseSchema>;
+/**
+ * L'inscription ouvre directement une session client : la vérification SMS
+ * devient asynchrone (best effort) et ne bloque plus l'accès à l'application.
+ */
+export const registerResponseSchema = authSessionSchema;
+export type RegisterResponse = AuthSession;
 
 export const otpChallengeSchema = z.object({
   expiresIn: z.number().int().positive(),

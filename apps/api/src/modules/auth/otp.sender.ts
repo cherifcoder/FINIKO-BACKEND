@@ -17,8 +17,9 @@ export interface OtpSender {
 class ConsoleOtpSender implements OtpSender {
   async send(message: OtpMessage): Promise<void> {
     if (env.NODE_ENV === 'production') {
-      throw new Error(
-        'Aucun fournisseur SMS/email configuré : définir SMS_PROVIDER et brancher un adaptateur.',
+      logger.warn(
+        { identifier: message.identifier, channel: message.channel, purpose: message.purpose },
+        'SMS_PROVIDER=console en production : le code est journalisé côté serveur. Brancher un fournisseur réel avant le lancement.',
       );
     }
 
@@ -30,7 +31,7 @@ class ConsoleOtpSender implements OtpSender {
         code: message.code,
         expiresInSeconds: message.expiresInSeconds,
       },
-      '[DEV] Code OTP généré',
+      '[OTP] Code généré',
     );
   }
 }

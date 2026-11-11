@@ -1,163 +1,125 @@
-import { Link, Redirect } from 'expo-router';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { useEffect, useRef } from 'react';
+import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { roleHome } from '../src/lib/role-home';
 import { useAuthStore } from '../src/stores/auth.store';
-import { colors, radius, spacing, typography } from '../src/theme/tokens';
+import { colors, typography } from '../src/theme/tokens';
 
-const roles = [
-  {
-    name: 'Client',
-    description: 'Commander, suivre, payer avec un pack ou Orange Money.',
-  },
-  {
-    name: 'Livreur',
-    description: 'Ramasser, contrôler la conformité, livrer.',
-  },
-  {
-    name: 'Pressing',
-    description: 'Réceptionner et traiter chaque article.',
-  },
-  {
-    name: 'Administrateur',
-    description: "Piloter le catalogue, les comptes et le chiffre d'affaires.",
-  },
-];
+/** Durée d'affichage du splash avant la redirection (ms). */
+const SPLASH_DURATION_MS = 1700;
 
-export default function HomeScreen() {
+/**
+ * Splash d'ouverture : le logo FINIKO apparaît avec une courte animation
+ * (fondu + zoom), puis l'utilisateur est dirigé vers la page de connexion —
+ * ou directement vers son espace s'il est déjà authentifié.
+ */
+export default function SplashScreen() {
   const status = useAuthStore((state) => state.status);
   const user = useAuthStore((state) => state.user);
 
-  if (status === 'authenticated' && user) {
-    return <Redirect href={roleHome(user.role)} />;
-  }
+  const logoOpacity = useRef(new Animated.Value(0)).current;
+  const logoScale = useRef(new Animated.Value(0.55)).current;
+  const wordmarkOpacity = useRef(new Animated.Value(0)).current;
+  const wordmarkTranslate = useRef(new Animated.Value(10)).current;
+  const hasNavigated = useRef(false);
+
+  useEffect(() => {
+    Animated.sequence([
+      Animated.parallel([
+        Animated.timing(logoOpacity, {
+          toValue: 1,
+          duration: 450,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(logoScale, {
+          toValue: 1,
+          duration: 700,
+          easing: Easing.out(Easing.back(1.7)),
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.parallel([
+        Animated.timing(wordmarkOpacity, {
+          toValue: 1,
+          duration: 320,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(wordmarkTranslate, {
+          toValue: 0,
+          duration: 320,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start();
+  }, [logoOpacity, logoScale, wordmarkOpacity, wordmarkTranslate]);
+
+  useEffect(() => {
+    if (status === 'loading') return;
+
+    const timer = setTimeout(() => {
+      if (hasNavigated.current) return;
+      hasNavigated.current = true;
+
+      if (status === 'authenticated' && user) {
+        router.replace(roleHome(user.role));
+      } else {
+        router.replace('/(auth)/login');
+      }
+    }, SPLASH_DURATION_MS);
+
+    return () => clearTimeout(timer);
+  }, [status, user]);
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      <ScrollView contentContainerStyle={styles.container}>
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>Lot 1 · Authentification</Text>
-        </View>
-
+    <View style={styles.container}>
+      <StatusBar style="dark" />
+      <Animated.Image
+        source={require('../assets/logo.png')}
+        resizeMode="contain"
+        style={[styles.logo, { opacity: logoOpacity, transform: [{ scale: logoScale }] }]}
+      />
+      <Animated.View
+        style={[
+          styles.wordmark,
+          { opacity: wordmarkOpacity, transform: [{ translateY: wordmarkTranslate }] },
+        ]}
+      >
         <Text style={styles.title}>FINIKO</Text>
-        <Text style={styles.subtitle}>
-          Blanchisserie et pressing à Bamako. Quatre espaces, une seule plateforme.
-        </Text>
-
-        <View style={styles.actions}>
-          <Link href="/(auth)/register" style={styles.primaryCta}>
-            Créer un compte client
-          </Link>
-          <Link href="/(auth)/login" style={styles.secondaryCta}>
-            J'ai déjà un compte
-          </Link>
-        </View>
-
-        <View style={styles.roles}>
-          {roles.map((role) => (
-            <View key={role.name} style={styles.roleCard}>
-              <Text style={styles.roleName}>{role.name}</Text>
-              <Text style={styles.roleDescription}>{role.description}</Text>
-            </View>
-          ))}
-        </View>
-
-        <Text style={styles.note}>
-          L'inscription est ouverte aux clients. Les comptes livreur, pressing et administrateur
-          sont créés par un administrateur, puis protégés par un changement de mot de passe à la
-          première connexion.
-        </Text>
-      </ScrollView>
-    </SafeAreaView>
+        <Text style={styles.subtitle}>Votre linge, notre métier.</Text>
+      </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: colors.brand[900],
-  },
   container: {
-    flexGrow: 1,
+    alignItems: 'center',
     backgroundColor: colors.background,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    padding: spacing.xl,
-    gap: spacing.lg,
+    flex: 1,
+    justifyContent: 'center',
   },
-  badge: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.brand[50],
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+  logo: {
+    height: 164,
+    marginBottom: 24,
+    width: 132,
   },
-  badgeText: {
-    ...typography.caption,
-    color: colors.brand[700],
+  wordmark: {
+    alignItems: 'center',
   },
   title: {
-    ...typography.display,
-    color: colors.brand[900],
-    letterSpacing: 1,
+    color: colors.neutral[900],
+    fontSize: 32,
+    fontWeight: '800',
+    letterSpacing: 3,
+    lineHeight: 38,
   },
   subtitle: {
-    ...typography.body,
-    color: colors.textMuted,
-  },
-  actions: {
-    gap: spacing.sm,
-  },
-  primaryCta: {
-    backgroundColor: colors.brand[600],
-    borderRadius: radius.md,
-    color: colors.surface,
-    fontSize: 16,
-    fontWeight: '700',
-    overflow: 'hidden',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    textAlign: 'center',
-  },
-  secondaryCta: {
-    backgroundColor: colors.surface,
-    borderColor: colors.brand[600],
-    borderRadius: radius.md,
-    borderWidth: 1,
-    color: colors.brand[700],
-    fontSize: 16,
-    fontWeight: '700',
-    overflow: 'hidden',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    textAlign: 'center',
-  },
-  roles: {
-    gap: spacing.sm,
-  },
-  roleCard: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    padding: spacing.lg,
-    gap: spacing.xs,
-  },
-  roleName: {
-    ...typography.title,
-    fontSize: 18,
-    lineHeight: 24,
-    color: colors.text,
-  },
-  roleDescription: {
-    ...typography.body,
-    fontSize: 14,
-    lineHeight: 20,
-    color: colors.textMuted,
-  },
-  note: {
     ...typography.caption,
     color: colors.textMuted,
-    textAlign: 'center',
+    marginTop: 6,
   },
 });

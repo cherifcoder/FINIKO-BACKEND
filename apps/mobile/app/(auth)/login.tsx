@@ -4,6 +4,7 @@ import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -82,9 +83,11 @@ export default function LoginScreen() {
         >
           <View style={styles.content}>
             <View style={styles.brandBlock}>
-              <View style={styles.logo}>
-                <Feather color={colors.surface} name="truck" size={38} />
-              </View>
+              <Image
+                source={require('../../assets/logo.png')}
+                resizeMode="contain"
+                style={styles.logo}
+              />
               <Text style={styles.brandName}>FINIKO</Text>
               <Text style={styles.brandSubtitle}>
                 Ravi de vous revoir ! Connectez-vous à votre compte.
@@ -204,7 +207,14 @@ export default function LoginScreen() {
             <View style={styles.legal}>
               <Text style={styles.legalText}>
                 En continuant, vous acceptez nos{' '}
-                <Text style={styles.legalLink}>Conditions d&apos;utilisation</Text>.
+                <Text
+                  accessibilityRole="link"
+                  onPress={() => router.push('/(auth)/conditions-utilisation')}
+                  style={styles.legalLink}
+                >
+                  Conditions d&apos;utilisation
+                </Text>
+                .
               </Text>
             </View>
           </View>
@@ -238,17 +248,8 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   logo: {
-    alignItems: 'center',
-    backgroundColor: colors.brand[600],
-    borderRadius: 24,
-    elevation: 6,
-    height: 80,
-    justifyContent: 'center',
+    height: 99,
     marginBottom: 16,
-    shadowColor: colors.brand[500],
-    shadowOffset: { height: 8, width: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
     width: 80,
   },
   brandName: {

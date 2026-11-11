@@ -25,6 +25,11 @@ export default tseslint.config(
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
       ],
+      // Les assets statiques (logo, images) passent par require() avec Metro.
+      '@typescript-eslint/no-require-imports': [
+        'error',
+        { allow: ['.*\\.(png|jpe?g|gif|webp|svg|ttf|otf)$'] },
+      ],
     },
   },
   {

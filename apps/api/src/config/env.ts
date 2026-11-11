@@ -48,7 +48,7 @@ const envSchema = z
         value === undefined ? process.env.NODE_ENV !== 'production' : value === 'true',
       ),
 
-    /** Fournisseur de SMS. `console` écrit le code dans les logs de dev uniquement. */
+    /** Fournisseur de SMS. `console` journalise le code côté serveur (alpha) ; brancher un vrai fournisseur avant le lancement. */
     SMS_PROVIDER: z.enum(['console', 'noop']).default('console'),
 
     ARGON2_MEMORY_KIB: z.coerce.number().int().min(8192).max(1_048_576).default(19_456),

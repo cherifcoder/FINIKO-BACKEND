@@ -4,6 +4,7 @@ import { Redirect, router } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -24,6 +25,7 @@ import { colors } from '../../src/theme/tokens';
 export default function RegisterScreen() {
   const status = useAuthStore((state) => state.status);
   const user = useAuthStore((state) => state.user);
+  const setSession = useAuthStore((state) => state.setSession);
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -64,15 +66,11 @@ export default function RegisterScreen() {
     setLoading(true);
 
     try {
-      const result = await registerRequest(parsed.data);
-      router.push({
-        pathname: '/(auth)/otp',
-        params: {
-          identifier: parsed.data.phone,
-          purpose: 'phone_verify',
-          ...(result.devCode ? { devCode: result.devCode } : {}),
-        },
-      });
+      // Le backend ouvre directement une session client : plus d'écran OTP,
+      // l'utilisateur entre immédiatement dans l'application.
+      const session = await registerRequest(parsed.data);
+      setSession(session);
+      router.replace(roleHome(session.user.role));
     } catch (caught) {
       setError(
         caught instanceof ApiClientError
@@ -97,9 +95,11 @@ export default function RegisterScreen() {
         >
           <View style={styles.content}>
             <View style={styles.brandBlock}>
-              <View style={styles.logo}>
-                <Feather color={colors.surface} name="truck" size={38} />
-              </View>
+              <Image
+                source={require('../../assets/logo.png')}
+                resizeMode="contain"
+                style={styles.logo}
+              />
               <Text style={styles.brandName}>FINIKO</Text>
               <Text style={styles.brandSubtitle}>
                 Créez votre compte et laissez-nous prendre soin de votre linge.
@@ -247,8 +247,22 @@ export default function RegisterScreen() {
               </View>
               <Text style={styles.termsText}>
                 J&apos;accepte les{' '}
-                <Text style={styles.termsLink}>conditions d&apos;utilisation</Text> et la{' '}
-                <Text style={styles.termsLink}>politique de confidentialité</Text>.
+                <Text
+                  accessibilityRole="link"
+                  onPress={() => router.push('/(auth)/conditions-utilisation')}
+                  style={styles.termsLink}
+                >
+                  conditions d&apos;utilisation
+                </Text>{' '}
+                et la{' '}
+                <Text
+                  accessibilityRole="link"
+                  onPress={() => router.push('/(auth)/conditions-utilisation')}
+                  style={styles.termsLink}
+                >
+                  politique de confidentialité
+                </Text>
+                .
               </Text>
             </Pressable>
 
@@ -285,7 +299,8 @@ export default function RegisterScreen() {
 
             <View style={styles.legal}>
               <Text style={styles.legalText}>
-                Votre numéro sera vérifié par un code SMS. Vos données restent protégées.
+                Votre compte client est actif immédiatement : commandez dès la fin de
+                l&apos;inscription.
               </Text>
             </View>
           </View>
@@ -319,17 +334,8 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
   logo: {
-    alignItems: 'center',
-    backgroundColor: colors.brand[600],
-    borderRadius: 24,
-    elevation: 6,
-    height: 80,
-    justifyContent: 'center',
+    height: 99,
     marginBottom: 16,
-    shadowColor: colors.brand[500],
-    shadowOffset: { height: 8, width: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
     width: 80,
   },
   brandName: {

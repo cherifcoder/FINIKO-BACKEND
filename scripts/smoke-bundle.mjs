@@ -59,6 +59,25 @@ server.listen(PORT, async () => {
   console.log(`[${login.status}] POST /api/v1/auth/login -> ${loginBody}`);
   if (!login.ok) failures += 1;
 
+  // Inscription : en production sans fournisseur SMS, le code de vérification
+  // ne doit jamais bloquer la création du compte — la session doit être
+  // ouverte directement (régression du bug "impossible d'envoyer le code").
+  const phone = `+22376${String(Math.floor(100000 + Math.random() * 900000))}`;
+  const register = await fetch(`${base}/api/v1/auth/register`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      firstName: 'Test',
+      lastName: 'Smoke',
+      phone,
+      password: 'Smoke@2026',
+      acceptTerms: true,
+    }),
+  });
+  const registerBody = (await register.text()).slice(0, 220);
+  console.log(`[${register.status}] POST /api/v1/auth/register -> ${registerBody}`);
+  if (register.status !== 201 || !registerBody.includes('accessToken')) failures += 1;
+
   server.close();
   console.log(failures === 0 ? 'SMOKE BUNDLE: OK' : `SMOKE BUNDLE: ${failures} échec(s)`);
   process.exit(failures === 0 ? 0 : 1);

@@ -2,10 +2,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAuthStore } from '../src/stores/auth.store';
-import { colors, spacing, typography } from '../src/theme/tokens';
+import { colors } from '../src/theme/tokens';
 
 export default function RootLayout() {
   const [queryClient] = useState(
@@ -31,8 +31,12 @@ export default function RootLayout() {
     return (
       <SafeAreaProvider>
         <View style={styles.splash}>
-          <Text style={styles.splashTitle}>FINIKO</Text>
-          <ActivityIndicator color={colors.brand[300]} />
+          <Image
+            source={require('../assets/logo.png')}
+            resizeMode="contain"
+            style={styles.splashLogo}
+          />
+          <ActivityIndicator color={colors.brand[600]} />
         </View>
       </SafeAreaProvider>
     );
@@ -60,14 +64,13 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   splash: {
     alignItems: 'center',
-    backgroundColor: colors.brand[900],
+    backgroundColor: colors.background,
     flex: 1,
-    gap: spacing.xl,
+    gap: 24,
     justifyContent: 'center',
   },
-  splashTitle: {
-    ...typography.display,
-    color: colors.surface,
-    letterSpacing: 2,
+  splashLogo: {
+    height: 164,
+    width: 132,
   },
 });
