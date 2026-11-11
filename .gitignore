@@ -8,8 +8,12 @@ build/
 coverage/
 *.tsbuildinfo
 
-# Serverless bundle (généré par tsup.serverless.config.ts pour Vercel)
-/api/
+# Serverless bundle (généré par tsup.serverless.config.ts pour Vercel).
+# ATTENTION : api/index.js (bundle prébuildé) DOIT être commité — le pattern
+# `functions` de vercel.json est validé AVANT le buildCommand sur les builds
+# Git, donc le fichier doit exister dans le repo (il est régénéré au build).
+api/*.map
+api/node_modules/
 
 # Environment files
 .env
