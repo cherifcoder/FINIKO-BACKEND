@@ -206,7 +206,7 @@ export default function DriverMissionScreen() {
     queryKey: ['driver', 'orders', orderId],
     queryFn: () => getDriverOrderRequest(orderId),
     enabled: Boolean(orderId) && user?.role === 'livreur',
-    refetchInterval: 20000,
+    refetchInterval: 10000,
   });
 
   const transitionMutation = useMutation({

@@ -198,7 +198,7 @@ export default function RegisterScreen() {
                   autoCapitalize="none"
                   autoComplete="new-password"
                   onChangeText={setPassword}
-                  placeholder="8 caractères, majuscule et chiffre"
+                  placeholder="6 caractères minimum"
                   placeholderTextColor="#94A3B8"
                   secureTextEntry={!showPassword}
                   style={styles.input}

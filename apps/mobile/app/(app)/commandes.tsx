@@ -68,6 +68,7 @@ export default function CommandesScreen() {
   const ordersQuery = useQuery({
     queryKey: ['orders', 'me'],
     queryFn: () => listMyOrdersRequest(),
+    refetchInterval: 10000,
   });
 
   if (!user) return null;

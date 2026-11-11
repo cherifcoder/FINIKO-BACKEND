@@ -46,10 +46,12 @@ describe('registerSchema', () => {
     expect(registerSchema.safeParse(withoutPhone).success).toBe(false);
   });
 
-  it('refuse un mot de passe trop simple', () => {
-    expect(registerSchema.safeParse({ ...registerPayload, password: 'motdepasse' }).success).toBe(
-      false,
-    );
+  it('accepte un mot de passe simple (au moins 6 caracteres)', () => {
+    expect(registerSchema.safeParse({ ...registerPayload, password: 'soleil' }).success).toBe(true);
+  });
+
+  it('refuse un mot de passe trop court', () => {
+    expect(registerSchema.safeParse({ ...registerPayload, password: 'abc12' }).success).toBe(false);
   });
 });
 

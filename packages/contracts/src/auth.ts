@@ -2,13 +2,14 @@ import { z } from 'zod';
 import { emailSchema, objectIdSchema, phoneSchema } from './common';
 import { USER_ROLES, USER_STATUSES } from './enums';
 
+/**
+ * Mot de passe : l'utilisateur est libre de le choisir, la seule contrainte
+ * est une longueur minimale (6 caractères).
+ */
 export const passwordSchema = z
   .string()
-  .min(8, 'Le mot de passe doit contenir au moins 8 caractères')
-  .max(128)
-  .regex(/[a-z]/, 'Le mot de passe doit contenir une minuscule')
-  .regex(/[A-Z]/, 'Le mot de passe doit contenir une majuscule')
-  .regex(/\d/, 'Le mot de passe doit contenir un chiffre');
+  .min(6, 'Le mot de passe doit contenir au moins 6 caractères')
+  .max(128);
 
 export const userRoleSchema = z.enum(USER_ROLES);
 export const userStatusSchema = z.enum(USER_STATUSES);

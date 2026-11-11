@@ -73,6 +73,7 @@ export default function PressingOrderScreen() {
     queryKey: ['pressing', 'order', id],
     queryFn: () => getPressingOrderRequest(id),
     enabled: user?.role === 'pressing' && Boolean(id),
+    refetchInterval: 10000,
   });
 
   const invalidate = () => {

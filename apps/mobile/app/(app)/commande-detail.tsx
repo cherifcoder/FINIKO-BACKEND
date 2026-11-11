@@ -74,6 +74,7 @@ export default function CommandeDetailScreen() {
     queryKey: ['orders', 'me', orderId],
     queryFn: () => getMyOrderRequest(orderId),
     enabled: Boolean(orderId),
+    refetchInterval: 10000,
   });
 
   const cancelMutation = useMutation({

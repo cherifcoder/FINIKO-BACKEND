@@ -966,12 +966,14 @@ export async function createClientOrder(
 
   const [pressingProfile, driverProfile] = await Promise.all([
     PressingProfileModel.findOne({ status: 'actif' }).sort({ currentLoad: 1 }).select('_id').lean(),
-    status === 'confirmee'
-      ? DriverProfileModel.findOne({ status: { $in: ['disponible', 'hors_ligne'] } })
-          .sort({ status: 1, updatedAt: 1 })
-          .select('_id')
-          .lean()
-      : Promise.resolve(null),
+    // Attribution automatique : peu importe le mode de paiement, la commande
+    // doit apparaitre dans la file du livreur des sa creation. On prefere un
+    // livreur disponible, mais un livreur deja en mission (ou hors ligne)
+    // recoit aussi la commande pour ne jamais bloquer la file.
+    DriverProfileModel.findOne({ status: { $in: ['disponible', 'en_mission', 'hors_ligne'] } })
+      .sort({ status: 1, updatedAt: 1 })
+      .select('_id')
+      .lean(),
   ]);
   const initialStatus: OrderStatus = driverProfile ? 'ramassage_assigne' : status;
 
@@ -1257,6 +1259,19 @@ export async function cancelClientOrder(
     await PaymentModel.updateOne(
       { _id: order.payment.payment, status: { $in: ['initie', 'en_attente'] } },
       { $set: { status: 'annule', failureCode: 'ORDER_CANCELLED' } },
+    ).catch(() => undefined);
+  }
+
+  // Libere le livreur : la mission annulee quitte sa file active et il repasse
+  // "disponible" s'il ne lui reste plus aucune mission en cours.
+  if (order.driver) {
+    await DriverProfileModel.updateOne(
+      { _id: order.driver },
+      { $pull: { activeOrderIds: order._id } },
+    ).catch(() => undefined);
+    await DriverProfileModel.updateOne(
+      { _id: order.driver, activeOrderIds: { $size: 0 } },
+      { $set: { status: 'disponible' } },
     ).catch(() => undefined);
   }
 

@@ -122,7 +122,7 @@ export default function DriverDashboardScreen() {
     queryKey: ['driver', 'orders'],
     queryFn: () => listDriverOrdersRequest(),
     enabled: user?.role === 'livreur',
-    refetchInterval: 30000,
+    refetchInterval: 10000,
   });
 
   if (!user) return null;

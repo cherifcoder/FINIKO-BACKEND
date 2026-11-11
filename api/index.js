@@ -123492,7 +123492,7 @@ var paginationSchema = external_exports.object({
 });
 
 // ../../packages/contracts/src/auth.ts
-var passwordSchema = external_exports.string().min(8, "Le mot de passe doit contenir au moins 8 caract\xE8res").max(128).regex(/[a-z]/, "Le mot de passe doit contenir une minuscule").regex(/[A-Z]/, "Le mot de passe doit contenir une majuscule").regex(/\d/, "Le mot de passe doit contenir un chiffre");
+var passwordSchema = external_exports.string().min(6, "Le mot de passe doit contenir au moins 6 caract\xE8res").max(128);
 var userRoleSchema = external_exports.enum(USER_ROLES);
 var userStatusSchema = external_exports.enum(USER_STATUSES);
 var roleAdminCreatableSchema = external_exports.enum(["client", "livreur", "pressing", "admin"]);
@@ -128666,7 +128666,11 @@ async function createClientOrder(clientId, input2) {
   const paymentStatus = totalDue === 0 ? "non_requis" : paymentMethod === "cash" ? "a_collecter" : "en_attente";
   const [pressingProfile, driverProfile] = await Promise.all([
     PressingProfileModel.findOne({ status: "actif" }).sort({ currentLoad: 1 }).select("_id").lean(),
-    status === "confirmee" ? DriverProfileModel.findOne({ status: { $in: ["disponible", "hors_ligne"] } }).sort({ status: 1, updatedAt: 1 }).select("_id").lean() : Promise.resolve(null)
+    // Attribution automatique : peu importe le mode de paiement, la commande
+    // doit apparaitre dans la file du livreur des sa creation. On prefere un
+    // livreur disponible, mais un livreur deja en mission (ou hors ligne)
+    // recoit aussi la commande pour ne jamais bloquer la file.
+    DriverProfileModel.findOne({ status: { $in: ["disponible", "en_mission", "hors_ligne"] } }).sort({ status: 1, updatedAt: 1 }).select("_id").lean()
   ]);
   const initialStatus = driverProfile ? "ramassage_assigne" : status;
   const order = new OrderModel({
@@ -128910,6 +128914,16 @@ async function cancelClientOrder(clientId, orderId, input2) {
     await PaymentModel.updateOne(
       { _id: order.payment.payment, status: { $in: ["initie", "en_attente"] } },
       { $set: { status: "annule", failureCode: "ORDER_CANCELLED" } }
+    ).catch(() => void 0);
+  }
+  if (order.driver) {
+    await DriverProfileModel.updateOne(
+      { _id: order.driver },
+      { $pull: { activeOrderIds: order._id } }
+    ).catch(() => void 0);
+    await DriverProfileModel.updateOne(
+      { _id: order.driver, activeOrderIds: { $size: 0 } },
+      { $set: { status: "disponible" } }
     ).catch(() => void 0);
   }
   return {

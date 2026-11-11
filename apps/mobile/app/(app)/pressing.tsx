@@ -134,7 +134,7 @@ export default function PressingDashboardScreen() {
     queryKey: ['pressing', 'orders'],
     queryFn: () => listPressingOrdersRequest(),
     enabled: user?.role === 'pressing',
-    refetchInterval: 30000,
+    refetchInterval: 10000,
   });
 
   if (!user) return null;
