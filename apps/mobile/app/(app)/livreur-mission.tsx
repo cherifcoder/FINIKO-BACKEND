@@ -6,9 +6,10 @@ import type {
   DriverTransitionStatus,
   OrderStatus,
 } from '@finiko/contracts';
+import * as Location from 'expo-location';
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { ApiClientError } from '../../src/api/client';
 import { getDriverOrderRequest, transitionDriverOrderRequest } from '../../src/api/driver';
 import { formatDateTime, formatXOF } from '../../src/lib/format';
@@ -22,6 +23,7 @@ import {
   coordinatesLabel,
   openGoogleMapsDirections,
   openGoogleMapsPlace,
+  type Coordinates,
 } from '../../src/lib/maps';
 import { roleHome } from '../../src/lib/role-home';
 import { useAuthStore } from '../../src/stores/auth.store';
@@ -201,6 +203,8 @@ export default function DriverMissionScreen() {
     tone: 'success' | 'error' | 'info';
     text: string;
   } | null>(null);
+  const [driverPosition, setDriverPosition] = useState<Coordinates | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
 
   const missionQuery = useQuery({
     queryKey: ['driver', 'orders', orderId],
@@ -284,6 +288,41 @@ export default function DriverMissionScreen() {
     ]);
   };
 
+  const locateDriver = async () => {
+    setIsLocating(true);
+    setFeedback(null);
+
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+
+      if (permission.status !== 'granted') {
+        setFeedback({
+          tone: 'error',
+          text: 'Autorisez la localisation pour calculer votre trajet depuis votre position.',
+        });
+        return;
+      }
+
+      const position = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      setDriverPosition({
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+      });
+    } catch {
+      setFeedback({
+        tone: 'error',
+        text: 'Votre position n’a pas pu être récupérée. Vérifiez le GPS de votre téléphone.',
+      });
+    } finally {
+      setIsLocating(false);
+    }
+  };
+
+  const mapDelivery = order.missionPhase === 'ramassage' ? undefined : order.delivery;
+
   return (
     <Screen
       onBack={() => router.back()}
@@ -349,32 +388,75 @@ export default function DriverMissionScreen() {
         </InlineMessage>
       ) : null}
 
-      {!isFinished ? (
-        <PrimaryButton
-          label={`Démarrer l’itinéraire vers ${targetLabel}`}
-          onPress={() => void openGoogleMapsDirections(target.coordinates)}
-        />
-      ) : null}
+      <SectionTitle>Itinéraire</SectionTitle>
+
+      <View style={styles.card}>
+        <View style={styles.routeHeader}>
+          <View style={styles.routeText}>
+            <Text style={styles.routeTitle}>Trajet vers {targetLabel}</Text>
+            <Text style={styles.routeSubtitle}>{target.text}</Text>
+          </View>
+
+          <Pressable
+            accessibilityLabel="Calculer depuis ma position"
+            accessibilityRole="button"
+            disabled={isLocating}
+            onPress={() => void locateDriver()}
+            style={({ pressed }) => [styles.locateButton, pressed && styles.pressed]}
+          >
+            {isLocating ? (
+              <ActivityIndicator color={colors.brand[700]} size="small" />
+            ) : (
+              <Ionicons color={colors.brand[700]} name="locate" size={16} />
+            )}
+            <Text style={styles.locateText}>Ma position</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.mapCard}>
+          <RouteMap
+            delivery={mapDelivery}
+            height={230}
+            origin={driverPosition ?? undefined}
+            pickup={order.pickup}
+          />
+        </View>
+
+        <Text style={styles.routeHint}>
+          {driverPosition
+            ? 'Itinéraire routier calculé depuis votre position actuelle (OpenStreetMap · OSRM).'
+            : 'Touchez « Ma position » pour calculer le trajet depuis votre position actuelle.'}
+        </Text>
+
+        {!isFinished ? (
+          <PrimaryButton
+            label="Lancer la navigation"
+            onPress={() =>
+              void openGoogleMapsDirections(target.coordinates, driverPosition ?? undefined)
+            }
+          />
+        ) : null}
+      </View>
 
       <SectionTitle>Adresses et contacts</SectionTitle>
 
       <AddressMissionCard
         address={order.pickup}
         label="Ramassage"
-        onDirections={() => void openGoogleMapsDirections(order.pickup.coordinates)}
+        onDirections={() =>
+          void openGoogleMapsDirections(order.pickup.coordinates, driverPosition ?? undefined)
+        }
         onViewOnMap={() => void openGoogleMapsPlace(order.pickup.coordinates)}
       />
 
       <AddressMissionCard
         address={order.delivery}
         label="Livraison"
-        onDirections={() => void openGoogleMapsDirections(order.delivery.coordinates)}
+        onDirections={() =>
+          void openGoogleMapsDirections(order.delivery.coordinates, driverPosition ?? undefined)
+        }
         onViewOnMap={() => void openGoogleMapsPlace(order.delivery.coordinates)}
       />
-
-      <View style={styles.mapCard}>
-        <RouteMap delivery={order.delivery} height={230} pickup={order.pickup} />
-      </View>
 
       <SectionTitle>Client</SectionTitle>
 
@@ -466,7 +548,8 @@ export default function DriverMissionScreen() {
 
       <View style={styles.footer}>
         <Text style={styles.footerText}>
-          Ouvre Google Maps pour lancer la navigation vers {targetLabel}.
+          Cartes et itinéraires OpenStreetMap · OSRM, sans clé API. La navigation s’ouvre dans
+          Google Maps si l’application est installée.
         </Text>
       </View>
     </Screen>
@@ -641,6 +724,51 @@ const styles = StyleSheet.create({
   mapCard: {
     borderRadius: radius.lg,
     overflow: 'hidden',
+  },
+  routeHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between',
+  },
+  routeText: {
+    flex: 1,
+    gap: 2,
+  },
+  routeTitle: {
+    ...typography.body,
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  routeSubtitle: {
+    ...typography.caption,
+    color: colors.textMuted,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  locateButton: {
+    alignItems: 'center',
+    backgroundColor: colors.brand[50],
+    borderColor: colors.brand[100],
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    minHeight: 34,
+    paddingHorizontal: spacing.sm,
+  },
+  locateText: {
+    ...typography.caption,
+    color: colors.brand[700],
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  routeHint: {
+    ...typography.caption,
+    color: colors.textMuted,
+    fontSize: 11,
+    lineHeight: 16,
   },
   clientRow: {
     alignItems: 'center',

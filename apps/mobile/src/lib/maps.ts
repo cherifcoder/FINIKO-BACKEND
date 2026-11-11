@@ -29,13 +29,33 @@ export function googleMapsPlaceUrl(destination: Coordinates): string {
   return `https://www.google.com/maps/search/?api=1&query=${destination.lat},${destination.lng}`;
 }
 
+/** Itinéraire voiture gratuit OpenStreetMap (moteur OSRM), sans clé API. */
+export function osmDirectionsUrl(from: Coordinates, to: Coordinates): string {
+  return (
+    'https://www.openstreetmap.org/directions?engine=fossgis_osrm_car' +
+    `&route=${from.lat}%2C${from.lng}%3B${to.lat}%2C${to.lng}`
+  );
+}
+
+export function osmPlaceUrl(destination: Coordinates): string {
+  return `https://www.openstreetmap.org/?mlat=${destination.lat}&mlon=${destination.lng}#map=17/${destination.lat}/${destination.lng}`;
+}
+
 /**
- * Ouvre l'application Google Maps si elle est installée, puis retombe sur la
- * version web. Le livreur peut ainsi lancer l'itinéraire en un seul geste.
+ * Ouvre la navigation vers une adresse : application Google Maps si elle est
+ * installée (guidage vocal), sinon la version web, puis OpenStreetMap/OSRM en
+ * dernier recours. Aucune clé API n'est nécessaire.
  */
-export async function openGoogleMapsDirections(destination: Coordinates): Promise<void> {
+export async function openGoogleMapsDirections(
+  destination: Coordinates,
+  origin?: Coordinates,
+): Promise<void> {
+  const webUrl = origin
+    ? osmDirectionsUrl(origin, destination)
+    : googleMapsDirectionsUrl(destination);
+
   if (Platform.OS === 'web') {
-    await Linking.openURL(googleMapsDirectionsUrl(destination));
+    await Linking.openURL(webUrl);
     return;
   }
 
@@ -48,10 +68,14 @@ export async function openGoogleMapsDirections(destination: Coordinates): Promis
     await Linking.openURL(nativeUrl);
     return;
   } catch {
-    // Google Maps n'est pas installé : on ouvre l'itinéraire dans le navigateur.
+    // Google Maps n'est pas installé : on tente le web puis OSM.
   }
 
-  await Linking.openURL(googleMapsDirectionsUrl(destination));
+  try {
+    await Linking.openURL(googleMapsDirectionsUrl(destination));
+  } catch {
+    await Linking.openURL(webUrl);
+  }
 }
 
 export async function openGoogleMapsPlace(destination: Coordinates): Promise<void> {
@@ -72,5 +96,9 @@ export async function openGoogleMapsPlace(destination: Coordinates): Promise<voi
     // Repli web ci-dessous.
   }
 
-  await Linking.openURL(googleMapsPlaceUrl(destination));
+  try {
+    await Linking.openURL(googleMapsPlaceUrl(destination));
+  } catch {
+    await Linking.openURL(osmPlaceUrl(destination));
+  }
 }
